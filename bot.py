@@ -1,97 +1,157 @@
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-import random
-import time
 import logging
+import asyncio
+from pyrogram import Client as PyroClient, errors as pyro_errors
+from telethon import TelegramClient
+from telethon.sessions import StringSession
+from telethon.errors import (
+    PhoneCodeInvalidError,
+    PhoneCodeExpiredError,
+    SessionPasswordNeededError
+)
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-# Telegram API ID और API Hash (अपनी जानकारी यहाँ डालें)
+
 API_ID = '28795512'  # यहाँ अपना API ID डालें
 API_HASH = 'c17e4eb6d994c9892b8a8b6bfea4042a'  # यहाँ अपना API Hash डालें
-
-# Bot Token (अपना बॉट टोकन यहाँ डालें)
 BOT_TOKEN = '7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA'
 
-# OTP वेरिफिकेशन के लिए इन-मेमोरी स्टोर
-otp_store = {}
 
-# Logging सेटअप
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# OTP जनरेट करने का फंक्शन (अब 5 अंकों का OTP जनरेट करेगा)
-def generate_otp() -> str:
-    return str(random.randint(10000, 99999))  # 5-digit OTP
+# Ask user to choose which library they want to generate the session string for
+ask_ques = "Please choose the Python library you want to generate the string session for:"
+buttons_ques = [
+    [
+        InlineKeyboardButton("Pyrogram V2", callback_data="pyrogram"),
+        InlineKeyboardButton("Telethon", callback_data="telethon"),
+    ],
+]
 
-# OTP भेजने के लिए कमांड
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("Welcome! Please send your phone number in this format: +<country_code><number>")
+# Ask for phone number after choosing library
+phone_number_ques = "Please send your phone number with country code, e.g., +19876543210"
 
-# OTP जनरेट और वेरिफिकेशन
-def send_otp(update: Update, context: CallbackContext) -> None:
+# Start command
+async def start(update: Update, context: CallbackContext) -> None:
+    await update.message.reply(
+        "Welcome to the Session String Generator Bot!\n"
+        "Please choose the library for which you want to generate the session string.",
+        reply_markup=InlineKeyboardMarkup(buttons_ques),
+    )
+
+# Button callback
+async def button(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "pyrogram":
+        await query.edit_message_text("You selected Pyrogram V2. Please send your phone number.")
+        await send_phone_number(update, context, "pyrogram")
+    elif query.data == "telethon":
+        await query.edit_message_text("You selected Telethon. Please send your phone number.")
+        await send_phone_number(update, context, "telethon")
+
+# Request phone number
+async def send_phone_number(update: Update, context: CallbackContext, library: str) -> None:
+    await update.message.reply(phone_number_ques)
+    context.user_data["library"] = library
+
+# Handle phone number
+async def handle_phone_number(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
     phone_number = update.message.text.strip()
+    context.user_data["phone_number"] = phone_number
 
-    if phone_number.startswith('+'):
-        # OTP जनरेट करें और भेजें
-        otp = generate_otp()
-        otp_store[phone_number] = {
-            'otp': otp,
-            'time': time.time()  # OTP एक्सपायरी टाइम
-        }
+    library = context.user_data.get("library")
+    
+    if library == "pyrogram":
+        await update.message.reply("Please wait while we generate your Pyrogram V2 session...")
+        await generate_pyrogram_session(update, context)
+    elif library == "telethon":
+        await update.message.reply("Please wait while we generate your Telethon session...")
+        await generate_telethon_session(update, context)
 
-        # OTP को उपयोगकर्ता को भेजें
-        update.message.reply_text(f"Your OTP is: {otp}\nPlease enter it to verify.")
+# Pyrogram V2 session generation
+async def generate_pyrogram_session(update: Update, context: CallbackContext) -> None:
+    phone_number = context.user_data["phone_number"]
+    try:
+        client = PyroClient("session_v2", API_ID, API_HASH)
+        await client.start(phone_number)
 
-    else:
-        update.message.reply_text("Please enter a valid phone number in the format: +<country_code><number>")
+        # OTP request for Pyrogram V2
+        phone_code_msg = await update.message.reply("Please check your Telegram app for the OTP. Send the OTP here after you receive it.")
+        phone_code = await update.message.reply("Enter OTP: Please send it in the format '12345'.")
+        await client.sign_in(phone_number, phone_code.text)
 
-# OTP वेरीफाई करने के लिए फंक्शन
-def verify_otp(update: Update, context: CallbackContext) -> None:
-    user_input_otp = update.message.text.strip()
-    phone_number = context.user_data.get('phone_number', None)
+        # Two-step verification password (if enabled)
+        if client.is_user_authorized() is False:  # Check if 2FA is enabled
+            two_step_password = await update.message.reply("Please enter your two-step verification password.")
+            await client.check_password(two_step_password.text)
 
-    if phone_number and phone_number in otp_store:
-        stored_otp_data = otp_store[phone_number]
-        stored_otp = stored_otp_data['otp']
-        otp_time = stored_otp_data['time']
+        session_string = await client.export_session_string()
+        await update.message.reply(f"Your Pyrogram V2 session string:\n`{session_string}`")
+    except pyro_errors.FloodWait as e:
+        await update.message.reply(f"Please wait for {e.x} seconds before trying again.")
+    except Exception as e:
+        await update.message.reply(f"An error occurred: {str(e)}")
+    finally:
+        await client.stop()
 
-        # 5 मिनट तक वैलिड OTP चेक करें
-        if time.time() - otp_time < 300:
-            if user_input_otp == stored_otp:
-                update.message.reply_text("OTP verified successfully! You are now authenticated.")
-                del otp_store[phone_number]  # OTP को समाप्त करें
-            else:
-                update.message.reply_text("Invalid OTP. Please try again.")
-        else:
-            update.message.reply_text("OTP expired. Please request a new OTP.")
-            del otp_store[phone_number]  # OTP को समाप्त करें
-    else:
-        update.message.reply_text("Please enter your phone number first by typing: +<country_code><number>")
+# Telethon session generation
+async def generate_telethon_session(update: Update, context: CallbackContext) -> None:
+    phone_number = context.user_data["phone_number"]
+    try:
+        client = TelegramClient(StringSession(), API_ID, API_HASH)
+        await client.start(phone_number)
 
-# OTP वेरिफिकेशन के लिए वेरिफाई कमांड
-def verify(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("Please send the OTP you received after submitting your phone number.")
+        # OTP request for Telethon
+        phone_code_msg = await update.message.reply("Please check your Telegram app for the OTP. Send the OTP here after you receive it.")
+        phone_code = await update.message.reply("Enter OTP: Please send it in the format '12345'.")
+        await client.sign_in(phone_number, phone_code.text)
 
-# Main function to start the bot
-def main() -> None:
-    """Start the bot."""
-    updater = Updater(BOT_TOKEN)
+        # Two-step verification password (if enabled)
+        if client.is_user_authorized() is False:  # Check if 2FA is enabled
+            two_step_password = await update.message.reply("Please enter your two-step verification password.")
+            await client.sign_in(password=two_step_password.text)
 
-    dispatcher = updater.dispatcher
+        session_string = client.session.save()
+        await update.message.reply(f"Your Telethon session string:\n`{session_string}`")
+    except PhoneCodeInvalidError:
+        await update.message.reply("OTP is invalid. Please try again.")
+    except PhoneCodeExpiredError:
+        await update.message.reply("OTP has expired. Please try again.")
+    except SessionPasswordNeededError:
+        await update.message.reply("Your account has 2FA enabled. Please provide your 2FA password.")
+    except Exception as e:
+        await update.message.reply(f"An error occurred: {str(e)}")
+    finally:
+        await client.disconnect()
 
-    # बॉट के कमांड्स जोड़ें
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("verify", verify))
+# Main function to handle messages
+async def handle_message(update: Update, context: CallbackContext) -> None:
+    if update.message.text:
+        await update.message.reply("Please choose an option using the buttons below.", reply_markup=InlineKeyboardMarkup(buttons_ques))
 
-    # यूज़र द्वारा फोन नंबर भेजने पर OTP जनरेट करने के लिए
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, send_otp))
+# Error handler
+def error(update: Update, context: CallbackContext) -> None:
+    logger.warning(f"Update {update} caused error {context.error}")
 
-    # OTP वेरिफिकेशन के लिए
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, verify_otp))
+def main():
+    # Create the Application
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    # बॉट को शुरू करें
-    updater.start_polling()
-    updater.idle()
+    # Commands and Message Handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+    application.add_handler(MessageHandler(filters.TEXT, handle_message))
 
-if __name__ == '__main__':
+    # Error handler
+    application.add_error_handler(error)
+
+    # Run the bot
+    application.run_polling()
+
+if __name__ == "__main__":
     main()
