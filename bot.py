@@ -13,10 +13,10 @@ LOGGER_GROUP_ID = -1002477750706
 # 🔹 Store user sessions
 user_sessions = {}
 
-# 🔹 SQLite Database Connection with Timeout
+# 🔹 SQLite Database Connection with Timeout and WAL (Write-Ahead Logging)
 def get_db_connection():
     conn = sqlite3.connect('session_data.db', timeout=10.0)
-    # Enable Write-Ahead Logging for improved performance
+    # Enable Write-Ahead Logging for improved performance and less locking
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=OFF;")
     return conn
@@ -146,7 +146,7 @@ async def process_password_input(event):
         await event.reply(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep it safe!**")
         del user_sessions[user_id]
     except Exception as e:
-        await event.reply(f"❌ **Error occurred: {str(e)}**")
+        await event.reply(f"❌ **Error occurred: {str(e)}")
 
 # 🔹 Start the bot
 print("🚀 Bot is running...")
