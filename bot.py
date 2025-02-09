@@ -9,7 +9,8 @@ from telethon.errors import SessionPasswordNeededError
 from pyrogram import Client
 from pyrogram.errors import SessionPasswordNeeded
 from aiogram import Bot, Dispatcher, types
-from aiogram.utils.executor import start_polling
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.enums import ParseMode
 
 # 🔹 Load API credentials from .env
 load_dotenv()
@@ -18,8 +19,8 @@ API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # 🔹 Initialize bot & dispatcher
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(bot)
+bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher()
 
 # 🔹 Start Image
 START_IMAGE = "https://files.catbox.moe/iuoj6u.jpg"
@@ -42,7 +43,7 @@ async def generate_telethon_session(phone_number: str, message: types.Message):
         await client.sign_in(password=password_msg.text)
 
     session_string = client.session.save()
-    await message.answer(f"✅ आपकी Telethon Session String:\n<code>{session_string}</code>\n🔒 इसे सुरक्षित रखें!", parse_mode="HTML")
+    await message.answer(f"✅ आपकी Telethon Session String:\n<code>{session_string}</code>\n🔒 इसे सुरक्षित रखें!")
 
     qr_buffer = generate_qr_code(session_string)
     await message.answer_photo(photo=qr_buffer, caption="📌 QR Code - Scan करके सुरक्षित रखें")
@@ -67,7 +68,7 @@ async def generate_pyrogram_session(phone_number: str, message: types.Message):
         await client.sign_in(password=password_msg.text)
 
     session_string = client.export_session_string()
-    await message.answer(f"✅ आपकी Pyrogram Session String:\n<code>{session_string}</code>\n🔒 इसे सुरक्षित रखें!", parse_mode="HTML")
+    await message.answer(f"✅ आपकी Pyrogram Session String:\n<code>{session_string}</code>\n🔒 इसे सुरक्षित रखें!")
 
     qr_buffer = generate_qr_code(session_string)
     await message.answer_photo(photo=qr_buffer, caption="📌 QR Code - Scan करके सुरक्षित रखें")
@@ -90,8 +91,8 @@ def generate_qr_code(data: str):
 @dp.message_handler(commands=['start'])
 async def start_command(message: types.Message):
     """ Handle /start command """
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("📲 Telethon Session", "📲 Pyrogram Session")
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(KeyboardButton("📲 Telethon Session"), KeyboardButton("📲 Pyrogram Session"))
 
     await message.answer_photo(START_IMAGE, caption="🔹 <b>Telegram Session String Generator</b>\n\n"
                                                     "✅ <b>Features:</b>\n"
@@ -99,7 +100,7 @@ async def start_command(message: types.Message):
                                                     "- OTP & 2FA Support\n"
                                                     "- QR Code for Safety\n\n"
                                                     "📌 <b>Select an option below:</b>",
-                               reply_markup=keyboard, parse_mode="HTML")
+                               reply_markup=keyboard)
 
 @dp.message_handler(lambda message: message.text == "📲 Telethon Session")
 async def telethon_session_handler(message: types.Message):
@@ -113,5 +114,9 @@ async def pyrogram_session_handler(message: types.Message):
     phone_number_msg = await bot.wait_for("message")
     await generate_pyrogram_session(phone_number_msg.text, message)
 
+async def main():
+    """ Run bot """
+    await dp.start_polling(bot)
+
 if __name__ == "__main__":
-    start_polling(dp, skip_updates=True)
+    asyncio.run(main())
