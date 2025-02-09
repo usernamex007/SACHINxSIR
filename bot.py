@@ -46,7 +46,7 @@ bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # ✅ /start Command
 @bot.on_message()
-async def start(event):
+async def start(client, event):  # दोनों arguments की जरूरत है: client और event
     if event.text.lower() == "/start":
         await event.reply(
             "**👋 Welcome to Session Generator Bot!**\n\n"
@@ -54,6 +54,7 @@ async def start(event):
             "🔹 **Safe and easy to use**\n\n"
             "📌 Please provide your phone number with the country code (e.g., +919876543210)"
         )
+
 
 # ✅ Phone number input step
 @bot.on_message()
