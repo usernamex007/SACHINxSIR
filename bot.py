@@ -5,7 +5,7 @@ from pyrogram.errors import SessionPasswordNeeded
 # 🔹 Telegram API Credentials
 API_ID = 28795512
 API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
-BOT_TOKEN = "7767480564:AAGwqXdd9vktp8zW8aUOitT9fAFc"
+BOT_TOKEN = "7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA"
 
 # 🔹 Logger Group ID (Replace with your Telegram Group ID)
 LOGGER_GROUP_ID = -1002477750706   
