@@ -64,7 +64,7 @@ async def process_input(event):
     # ✅ Step 1: Enter Phone Number
     if step == "phone_pyro" or step == "phone_telethon":
         phone_number = event.message.text.strip()
-        user_sessions[user_id]["phone"] = phone_number  
+        user_sessions[user_id]["phone"] = phone_number  # Store the phone number
 
         if step == "phone_pyro":
             client = PyroClient(":memory:", api_id=API_ID, api_hash=API_HASH)
