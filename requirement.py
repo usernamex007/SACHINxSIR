@@ -1,4 +1,3 @@
 asyncio
-qrcode
 telethon
 pyrogram
