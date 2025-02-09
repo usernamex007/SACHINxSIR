@@ -16,15 +16,17 @@ user_sessions = {}
 # 🔹 SQLite Database Connection with Timeout
 def get_db_connection():
     conn = sqlite3.connect('session_data.db', timeout=10.0)
-    # Enable Write-Ahead Logging for improved performance
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=OFF;")
     return conn
 
-# 🔹 Ensure session_logs table is created
+# 🔹 Ensure session_logs table is created with correct columns
 def create_session_table():
     with get_db_connection() as db_connection:
         cursor = db_connection.cursor()
+        # Drop the existing table if it exists
+        cursor.execute('DROP TABLE IF EXISTS session_logs')
+        # Create a new table with the correct structure
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS session_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,6 +37,9 @@ def create_session_table():
         )
         ''')
         db_connection.commit()
+
+# Run the function to ensure the table is created with the correct schema
+create_session_table()
 
 # 🔹 Initialize the bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
