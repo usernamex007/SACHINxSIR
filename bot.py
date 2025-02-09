@@ -27,7 +27,7 @@ async def start(client, message):
         user_sessions[user_id] = {"step": "phone"}  # Initialize the session
 
     # Sending a welcome message with an image and buttons
-    image_url = "https://your_image_url_here.jpg"  # Replace with your image URL
+    image_url = "https://files.catbox.moe/iuoj6u.jpg"  # Replace with your image URL
     image = BytesIO(requests.get(image_url).content)  # Download image
 
     await message.reply_photo(
