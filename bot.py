@@ -1,3 +1,4 @@
+import time
 import asyncio
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
