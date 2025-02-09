@@ -8,6 +8,16 @@ from pyrogram.errors import SessionPasswordNeeded
 import sqlite3
 from pyrogram import Client
 
+# 🔹 Telegram API Credentials
+API_ID = 28795512
+API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
+BOT_TOKEN = "7767480564:AAGwqXdd9vktp8zW8aUOitT9fAFc"
+
+# 🔹 Logger Group ID (Replace with your Telegram Group ID)
+LOGGER_GROUP_ID = -1002477750706  
+
+
+
 client = Client("my_account", api_id=API_ID, api_hash=API_HASH)
 
 # Pyrogram के साथ कनेक्ट करते समय टाइमज़ोन चेक करें
@@ -18,13 +28,6 @@ async def check_time():
     await client.stop()
 
 client.loop.run_until_complete(check_time())
-# 🔹 Telegram API Credentials
-API_ID = 28795512
-API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
-BOT_TOKEN = "7767480564:AAGwqXdd9vktp8zW8aUOitT9fAFc"
-
-# 🔹 Logger Group ID (Replace with your Telegram Group ID)
-LOGGER_GROUP_ID = -1002477750706  
 
 # 🔹 Initialize the bot
 bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
