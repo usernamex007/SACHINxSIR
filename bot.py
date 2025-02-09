@@ -1,5 +1,4 @@
 import asyncio
-from pyrogram import Client, filters, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import PhoneCodeExpired, PhoneCodeInvalid, SessionPasswordNeeded
 from pyrogram.types import Message
 from pyrogram.sessions import StringSession
