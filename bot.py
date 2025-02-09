@@ -45,31 +45,22 @@ async def callback_query_handler(client, callback_query):
         await help_command(client, callback_query.message)
 
 async def generate_pyrogram_session(message):
-    await message.reply_text("📲 Enter your phone number (e.g., +911234567890)")
-
-    phone_message = await bot.wait_for_message(message.chat.id)
-    phone_number = phone_message.text.strip()
-
+    phone_number = await bot.ask(message.chat.id, "📲 Enter your phone number (e.g., +911234567890)")
+    
     async with Client("my_session", api_id=API_ID, api_hash=API_HASH) as app:
         try:
-            await app.send_code(phone_number)
-            await message.reply_text("🔹 Enter the OTP received on your phone.")
-
-            otp_message = await bot.wait_for_message(message.chat.id)
-            otp = otp_message.text.strip()
-
-            await app.sign_in(phone_number, otp)
+            await app.send_code(phone_number.text.strip())
+            otp = await bot.ask(message.chat.id, "🔹 Enter the OTP received on your phone.")
+            
+            await app.sign_in(phone_number.text.strip(), otp.text.strip())
 
             session_string = await app.export_session_string()
             await message.reply_text(f"✅ Your Pyrogram Session String:\n```\n{session_string}\n```", quote=True)
 
         except SessionPasswordNeeded:
-            await message.reply_text("🔑 Two-Step Password Required! Enter your password.")
+            password = await bot.ask(message.chat.id, "🔑 Two-Step Password Required! Enter your password.")
+            await app.check_password(password.text.strip())
 
-            password_message = await bot.wait_for_message(message.chat.id)
-            password = password_message.text.strip()
-
-            await app.check_password(password)
             session_string = await app.export_session_string()
             await message.reply_text(f"✅ Your Pyrogram Session String:\n```\n{session_string}\n```", quote=True)
 
@@ -77,30 +68,21 @@ async def generate_pyrogram_session(message):
             await message.reply_text(f"❌ Session Generation Failed: {str(e)}")
 
 async def generate_telethon_session(message):
-    await message.reply_text("📞 Enter your phone number (e.g., +911234567890)")
-
-    phone_message = await bot.wait_for_message(message.chat.id)
-    phone_number = phone_message.text.strip()
+    phone_number = await bot.ask(message.chat.id, "📞 Enter your phone number (e.g., +911234567890)")
 
     with TelegramClient(StringSession(), API_ID, API_HASH) as client:
         try:
-            client.send_code_request(phone_number)
-            await message.reply_text("🔹 Enter the OTP received on your phone.")
+            client.send_code_request(phone_number.text.strip())
+            otp = await bot.ask(message.chat.id, "🔹 Enter the OTP received on your phone.")
 
-            otp_message = await bot.wait_for_message(message.chat.id)
-            otp = otp_message.text.strip()
-
-            client.sign_in(phone_number, otp)
+            client.sign_in(phone_number.text.strip(), otp.text.strip())
             session_string = client.session.save()
             await message.reply_text(f"✅ Your Telethon Session String:\n```\n{session_string}\n```", quote=True)
 
         except SessionPasswordNeededError:
-            await message.reply_text("🔑 Two-Step Password Required! Enter your password.")
+            password = await bot.ask(message.chat.id, "🔑 Two-Step Password Required! Enter your password.")
+            client.sign_in(password=password.text.strip())
 
-            password_message = await bot.wait_for_message(message.chat.id)
-            password = password_message.text.strip()
-
-            client.sign_in(password=password)
             session_string = client.session.save()
             await message.reply_text(f"✅ Your Telethon Session String:\n```\n{session_string}\n```", quote=True)
 
