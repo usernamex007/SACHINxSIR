@@ -1,20 +1,24 @@
 import asyncio
+import os
 import qrcode
 from io import BytesIO
+from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession as TelethonSession
 from telethon.errors import SessionPasswordNeededError
 from pyrogram import Client
 from pyrogram.errors import SessionPasswordNeeded
 from aiogram import Bot, Dispatcher, types
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils import executor
 
-# 🔹 Replace with your Bot Token
-API_ID = 28795512
-API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
-BOT_TOKEN = "7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA"
+# 🔹 Load API credentials from .env
+load_dotenv()
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# 🔹 Bot Initialization
+# 🔹 Initialize bot & dispatcher
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
@@ -29,13 +33,13 @@ async def generate_telethon_session(phone_number, message):
     sent_code = await client.send_code_request(phone_number)
     await message.answer("🔹 OTP भेज दिया गया है, कृपया दर्ज करें:")
     
-    otp = await bot.wait_for('message')
+    otp = await bot.wait_for("message")
 
     try:
         await client.sign_in(phone_number, otp.text)
     except SessionPasswordNeededError:
         await message.answer("🔐 2FA इनेबल है, कृपया पासवर्ड दर्ज करें:")
-        password = await bot.wait_for('message')
+        password = await bot.wait_for("message")
         await client.sign_in(password=password.text)
 
     session_string = client.session.save()
@@ -54,13 +58,13 @@ async def generate_pyrogram_session(phone_number, message):
     sent_code = await client.send_code(phone_number)
     await message.answer("🔹 OTP भेज दिया गया है, कृपया दर्ज करें:")
 
-    otp = await bot.wait_for('message')
+    otp = await bot.wait_for("message")
 
     try:
         await client.sign_in(phone_number, otp.text)
     except SessionPasswordNeeded:
         await message.answer("🔐 2FA इनेबल है, कृपया पासवर्ड दर्ज करें:")
-        password = await bot.wait_for('message')
+        password = await bot.wait_for("message")
         await client.sign_in(password=password.text)
 
     session_string = client.export_session_string()
@@ -87,8 +91,8 @@ def generate_qr_code(data):
 @dp.message_handler(commands=['start'])
 async def start_command(message: types.Message):
     """ Handle /start command """
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("📲 Telethon Session", "📲 Pyrogram Session")
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(KeyboardButton("📲 Telethon Session"), KeyboardButton("📲 Pyrogram Session"))
 
     await message.answer_photo(START_IMAGE, caption="🔹 *Telegram Session String Generator*\n\n"
                                                     "✅ *Features:* \n"
@@ -101,13 +105,13 @@ async def start_command(message: types.Message):
 @dp.message_handler(lambda message: message.text == "📲 Telethon Session")
 async def telethon_session_handler(message: types.Message):
     await message.answer("📱 अपना Telegram फ़ोन नंबर दर्ज करें (जैसे: `+919876543210`):")
-    phone_number = await bot.wait_for('message')
+    phone_number = await bot.wait_for("message")
     await generate_telethon_session(phone_number.text, message)
 
 @dp.message_handler(lambda message: message.text == "📲 Pyrogram Session")
 async def pyrogram_session_handler(message: types.Message):
     await message.answer("📱 अपना Telegram फ़ोन नंबर दर्ज करें (जैसे: `+919876543210`):")
-    phone_number = await bot.wait_for('message')
+    phone_number = await bot.wait_for("message")
     await generate_pyrogram_session(phone_number.text, message)
 
 if __name__ == "__main__":
