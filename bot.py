@@ -13,10 +13,10 @@ LOGGER_GROUP_ID = -1002477750706
 # 🔹 Store user sessions
 user_sessions = {}
 
-# 🔹 SQLite Database Connection with Timeout and WAL (Write-Ahead Logging)
+# 🔹 SQLite Database Connection with Timeout
 def get_db_connection():
     conn = sqlite3.connect('session_data.db', timeout=10.0)
-    # Enable Write-Ahead Logging for improved performance and less locking
+    # Enable Write-Ahead Logging for improved performance
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=OFF;")
     return conn
@@ -146,7 +146,26 @@ async def process_password_input(event):
         await event.reply(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep it safe!**")
         del user_sessions[user_id]
     except Exception as e:
-        await event.reply(f"❌ **Error occurred: {str(e)}")
+        await event.reply(f"❌ **Error occurred: {str(e)}**")
+
+# 🔹 Reset the database if the 'number' column is missing
+def reset_database_if_needed():
+    try:
+        with get_db_connection() as db_connection:
+            cursor = db_connection.cursor()
+            cursor.execute("PRAGMA table_info(session_logs);")
+            columns = cursor.fetchall()
+
+            # Check if 'phone' column is missing
+            if not any(column[1] == "phone" for column in columns):
+                print("⚠️ 'phone' column is missing, resetting database...")
+                cursor.execute("DROP TABLE IF EXISTS session_logs;")
+                create_session_table()
+    except Exception as e:
+        print(f"❌ Error resetting database: {e}")
+
+# 🔹 Check and reset database at the start
+reset_database_if_needed()
 
 # 🔹 Start the bot
 print("🚀 Bot is running...")
