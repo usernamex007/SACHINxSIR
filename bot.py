@@ -36,19 +36,20 @@ phone_number_ques = "Please send your phone number with country code, e.g., +198
 # Start command
 async def start(update: Update, context: CallbackContext) -> None:
     if update.message:
+        # अगर ये एक सामान्य संदेश है
         await update.message.reply(
             "Welcome to the Session String Generator Bot!\n"
             "Please choose the library for which you want to generate the session string.",
             reply_markup=InlineKeyboardMarkup(buttons_ques),
         )
     elif update.callback_query:
+        # अगर ये callback query है (जैसे बटन दबाने पर)
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(
             "Welcome to the Session String Generator Bot!\n"
             "Please choose the library for which you want to generate the session string.",
             reply_markup=InlineKeyboardMarkup(buttons_ques),
         )
-
 
 # Button callback
 async def button(update: Update, context: CallbackContext) -> None:
