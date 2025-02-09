@@ -6,7 +6,18 @@ from telethon.errors import SessionPasswordNeededError
 from pyrogram import Client as PyroClient
 from pyrogram.errors import SessionPasswordNeeded
 import sqlite3
+from pyrogram import Client
 
+client = Client("my_account", api_id=API_ID, api_hash=API_HASH)
+
+# Pyrogram के साथ कनेक्ट करते समय टाइमज़ोन चेक करें
+async def check_time():
+    await client.start()
+    server_time = await client.get_me()
+    print(f"Server time: {server_time}")
+    await client.stop()
+
+client.loop.run_until_complete(check_time())
 # 🔹 Telegram API Credentials
 API_ID = 28795512
 API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
