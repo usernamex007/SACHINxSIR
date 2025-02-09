@@ -1,5 +1,4 @@
-pyrogram
-telethon
-tgcrypto
-qrcode
-pillow
+python-dotenv>=0,<1
+pyrogram>=2,<3
+telethon>=1,<2
+telegram>=20,<21
