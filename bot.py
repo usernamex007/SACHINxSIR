@@ -79,7 +79,7 @@ async def process_input(event):
         phone_number = user_sessions[user_id]["phone"]
         phone_code_hash = user_sessions[user_id]["phone_code_hash"]
 
-        retries = 3  # Max retries for OTP
+        retries = 5  # Max retries for OTP
         for attempt in range(retries):
             try:
                 if isinstance(client, PyroClient):
@@ -103,7 +103,7 @@ async def process_input(event):
                     sent_code = await client.send_code(phone_number)
                     user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  # Update phone_code_hash
                     await event.respond("🔹 **New OTP sent. Please enter the code again.**")
-                    time.sleep(2)  # Add delay between OTP retries
+                    time.sleep(3)  # Add delay between OTP retries to avoid too many requests
                 else:
                     await event.respond("❌ **Error:** The OTP expired multiple times. Please try again later.")
                     if user_id in user_sessions:  # Ensure session exists before deleting
