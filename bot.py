@@ -7,9 +7,9 @@ from telethon.sessions import StringSession
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Bot Credentials
+API_ID=28795512
+API_HASH="c17e4eb6d994c9892b8a8b6bfea4042a"
 BOT_TOKEN = "7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc"
-API_ID = 28795512  # अपना API ID डालें
-API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
 
 # Welcome Photo (इसे अपनी मनचाही फोटो से बदल सकते हैं)
 WELCOME_PHOTO = "welcome.jpg"
