@@ -15,7 +15,11 @@ user_sessions = {}
 
 # 🔹 SQLite Database Connection with Timeout
 def get_db_connection():
-    return sqlite3.connect('session_data.db', timeout=10.0)  # Timeout after 10 seconds
+    conn = sqlite3.connect('session_data.db', timeout=10.0)
+    # Enable Write-Ahead Logging for improved performance
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=OFF;")
+    return conn
 
 # 🔹 Ensure session_logs table is created
 def create_session_table():
