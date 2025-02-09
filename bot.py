@@ -7,14 +7,15 @@ from telethon.sessions import StringSession
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Bot Credentials
-API_ID=28795512
-API_HASH="c17e4eb6d994c9892b8a8b6bfea4042a"
+API_ID = 28795512
+API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
 BOT_TOKEN = "7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc"
 
 # Welcome Photo (इसे अपनी मनचाही फोटो से बदल सकते हैं)
 WELCOME_PHOTO = "welcome.jpg"
 
 bot = Client("session_bot", bot_token=BOT_TOKEN)
+
 
 @bot.on_message(filters.command("start"))
 async def start(client, message):
@@ -26,6 +27,7 @@ async def start(client, message):
         [InlineKeyboardButton("ℹ️ Help", callback_data="help")]
     ])
     await message.reply_photo(WELCOME_PHOTO, caption="🔹 Session Generate करने के लिए ऑप्शन चुनें:", reply_markup=keyboard)
+
 
 @bot.on_message(filters.command("help"))
 async def help_command(client, message):
@@ -39,6 +41,7 @@ async def help_command(client, message):
         "✅ **मदद के लिए:** `/help`"
     )
     await message.reply_text(help_text)
+
 
 @bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
@@ -56,23 +59,37 @@ async def callback_query_handler(client, callback_query):
     elif callback_query.data == "help":
         await help_command(client, callback_query.message)
 
+
 async def pyrogram_session(message):
-    async with Client("my_session", api_id=API_ID, api_hash=API_HASH) as app:
-        session_string = await app.export_session_string()
-        await message.reply_text(f"✅ आपकी Pyrogram Session String:\n```\n{session_string}\n```", quote=True)
+    try:
+        async with Client("my_session", api_id=API_ID, api_hash=API_HASH) as app:
+            session_string = await app.export_session_string()
+            await message.reply_text(f"✅ आपकी Pyrogram Session String:\n```\n{session_string}\n```", quote=True)
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+
 
 async def telethon_session(message):
-    with TelegramClient(StringSession(), API_ID, API_HASH) as client:
-        session_string = client.session.save()
-        await message.reply_text(f"✅ आपकी Telethon Session String:\n```\n{session_string}\n```", quote=True)
+    try:
+        with TelegramClient(StringSession(), API_ID, API_HASH) as client:
+            session_string = client.session.save()
+            await message.reply_text(f"✅ आपकी Telethon Session String:\n```\n{session_string}\n```", quote=True)
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+
 
 async def qr_code_login(message):
-    async with Client("qr_session", api_id=API_ID, api_hash=API_HASH) as app:
-        qr_code = await app.export_login_qr()
-        qr_image = qrcode.make(qr_code)
-        qr_image_path = "qr_code.png"
-        qr_image.save(qr_image_path)
-        await message.reply_photo(qr_image_path, caption="📷 QR Code स्कैन करें और लॉगिन करें।")
+    try:
+        async with Client("qr_session", api_id=API_ID, api_hash=API_HASH) as app:
+            qr_code = await app.export_login_qr()
+            qr_image = qrcode.make(qr_code)
+            qr_image_path = "qr_code.png"
+            qr_image.save(qr_image_path)
+            await message.reply_photo(qr_image_path, caption="📷 QR Code स्कैन करें और लॉगिन करें।")
+            os.remove(qr_image_path)  # Auto Delete QR Code
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {str(e)}")
+
 
 @bot.on_message(filters.text)
 async def check_session_validity(client, message):
@@ -87,5 +104,6 @@ async def check_session_validity(client, message):
             await message.reply_text("✅ यह Session String वैध है!")
     except Exception as e:
         await message.reply_text(f"❌ Session Invalid है! Error: {str(e)}")
+
 
 bot.run()
