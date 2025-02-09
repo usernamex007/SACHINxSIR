@@ -1,9 +1,8 @@
-import time
-import asyncio
-from telethon import TelegramClient
-from telethon.errors import PhoneCodeExpiredError
+from telethon import TelegramClient, events  # Add this line
 from pyrogram import Client as PyroClient
 from telethon.sessions import StringSession
+import time
+from telethon.errors import PhoneCodeExpiredError
 
 # 🔹 Telegram API Credentials
 API_ID = 28795512
@@ -17,7 +16,7 @@ bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 user_sessions = {}
 
 # ✅ /start Command
-@bot.on(events.NewMessage(pattern="/start"))
+@bot.on(events.NewMessage(pattern="/start"))  # This listens for the '/start' command
 async def start(event):
     await event.respond(
         "**👋 Welcome to Session Generator Bot!**\n\n"
