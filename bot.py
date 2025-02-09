@@ -15,7 +15,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 API_ID = '28795512'  # यहाँ अपना API ID डालें
 API_HASH = 'c17e4eb6d994c9892b8a8b6bfea4042a'  # यहाँ अपना API Hash डालें
-BOT_TOKEN = '7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA'
+BOT_TOKEN = '7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc'
 
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
