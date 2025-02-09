@@ -1,3 +1,5 @@
-asyncio
-telethon
 pyrogram
+telethon
+tgcrypto
+qrcode
+pillow
