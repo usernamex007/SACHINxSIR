@@ -5,14 +5,12 @@ from io import BytesIO
 import requests
 
 # Replace with your values
-
 API_ID = 28795512
 API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
 BOT_TOKEN = "7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc"  
 
 # 🔹 Logger Group ID (Replace with your Telegram Group ID)
 LOGGER_GROUP_ID = -1002477750706
-
 
 user_sessions = {}  # Dictionary to store user session data
 
@@ -152,4 +150,5 @@ async def help(client, callback_query):
     )
 
 # Start the bot
-bot.run()
+if __name__ == "__main__":
+    bot.run()
