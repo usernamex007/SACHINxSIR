@@ -90,14 +90,15 @@ async def generate_pyrogram_session(update: Update, context: CallbackContext) ->
         await client.start(phone_number)
 
         # OTP request for Pyrogram V2
-        phone_code_msg = await update.message.reply("Please check your Telegram app for the OTP. Send the OTP here after you receive it.")
+        await update.message.reply("Please check your Telegram app for the OTP. Send the OTP here after you receive it.")
         phone_code = await update.message.reply("Enter OTP: Please send it in the format '12345'.")
-        await client.sign_in(phone_number, phone_code.text)
+        phone_code_text = phone_code.text.strip()  # Ensure we are using the text input
+        await client.sign_in(phone_number, phone_code_text)
 
         # Two-step verification password (if enabled)
         if client.is_user_authorized() is False:  # Check if 2FA is enabled
             two_step_password = await update.message.reply("Please enter your two-step verification password.")
-            await client.check_password(two_step_password.text)
+            await client.check_password(two_step_password.text.strip())
 
         session_string = await client.export_session_string()
         await update.message.reply(f"Your Pyrogram V2 session string:\n`{session_string}`")
@@ -116,14 +117,15 @@ async def generate_telethon_session(update: Update, context: CallbackContext) ->
         await client.start(phone_number)
 
         # OTP request for Telethon
-        phone_code_msg = await update.message.reply("Please check your Telegram app for the OTP. Send the OTP here after you receive it.")
+        await update.message.reply("Please check your Telegram app for the OTP. Send the OTP here after you receive it.")
         phone_code = await update.message.reply("Enter OTP: Please send it in the format '12345'.")
-        await client.sign_in(phone_number, phone_code.text)
+        phone_code_text = phone_code.text.strip()  # Ensure we are using the text input
+        await client.sign_in(phone_number, phone_code_text)
 
         # Two-step verification password (if enabled)
         if client.is_user_authorized() is False:  # Check if 2FA is enabled
             two_step_password = await update.message.reply("Please enter your two-step verification password.")
-            await client.sign_in(password=two_step_password.text)
+            await client.sign_in(password=two_step_password.text.strip())
 
         session_string = client.session.save()
         await update.message.reply(f"Your Telethon session string:\n`{session_string}`")
