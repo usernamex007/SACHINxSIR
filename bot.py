@@ -6,7 +6,7 @@ from telethon.sessions import StringSession
 # 🔹 Telegram API Credentials
 API_ID = 28795512
 API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
-BOT_TOKEN = "7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA"
+BOT_TOKEN = "7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc"
 
 # 🔹 Logger Group ID (Replace with your Telegram Group ID)
 LOGGER_GROUP_ID = -1002477750706  
