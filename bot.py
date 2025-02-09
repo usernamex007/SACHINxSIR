@@ -1,4 +1,4 @@
-from telethon import TelegramClient, events  # Add this line
+from telethon import TelegramClient, events, Button  # Add 'Button' import here
 from pyrogram import Client as PyroClient
 from telethon.sessions import StringSession
 import time
