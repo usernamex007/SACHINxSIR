@@ -2,6 +2,7 @@ import os
 import asyncio
 import qrcode
 from io import BytesIO
+from telethon import events
 from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession as TelethonSession
