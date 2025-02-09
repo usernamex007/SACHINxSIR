@@ -9,7 +9,7 @@ from telethon.errors import (
     SessionPasswordNeededError
 )
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, CallbackQueryHandler  # Fix for CallbackQueryHandler import
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
@@ -143,7 +143,7 @@ def main():
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Commands and Message Handlers
-    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("start", start))  # Using the start function from callbacks
     application.add_handler(CallbackQueryHandler(button))
     application.add_handler(MessageHandler(filters.TEXT, handle_message))
 
