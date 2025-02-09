@@ -1,5 +1,5 @@
 import sqlite3
-from pyrogram import Client, errors
+from pyrogram import Client, filters, errors
 from pyrogram.errors import SessionPasswordNeeded
 
 # 🔹 Telegram API Credentials
