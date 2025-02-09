@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from config import API_ID, API_HASH, BOT_TOKEN  # Importing API credentials from config.py
-from ss.callbacks import button, send_phone_number  # Importing functions from callbacks.py
+from ss.callbacks import button, send_phone_number, start  # Importing functions from callbacks.py
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
