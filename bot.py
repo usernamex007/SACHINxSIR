@@ -101,7 +101,7 @@ async def process_input(event):
                     sent_code = await client.send_code(phone_number)
                     user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  # Update phone_code_hash
                     await event.respond("🔹 **New OTP sent. Please enter the code again.**")
-                    time.sleep(5)  # Increased retry delay (5 seconds)
+                    time.sleep(3)  # Reduced retry delay (3 seconds)
                 else:
                     await event.respond("❌ **Error:** The OTP expired multiple times. Please try again later.")
                     del user_sessions[user_id]  # Remove session if failed after retries
