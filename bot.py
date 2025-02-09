@@ -1,14 +1,17 @@
+import logging
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import SessionPasswordNeeded
 from io import BytesIO
 import requests
-import sqlite3
+
+# Enable logging
+logging.basicConfig(level=logging.DEBUG)
 
 # Replace with your values
 API_ID = 28795512
 API_HASH = "c17e4eb6d994c9892b8a8b6bfea4042a"
-BOT_TOKEN = "7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc"  
+BOT_TOKEN = "7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fAFc"
 
 # 🔹 Logger Group ID (Replace with your Telegram Group ID)
 LOGGER_GROUP_ID = -1002477750706
@@ -17,12 +20,6 @@ user_sessions = {}  # Dictionary to store user session data
 
 # Initialize the Pyrogram bot
 bot = Client("session_generator_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
-
-# SQLite Database Configuration
-def enable_wal_mode():
-    conn = sqlite3.connect('your_database.db')
-    conn.execute('PRAGMA journal_mode=WAL')
-    conn.close()
 
 # Handle /start command
 @bot.on_message(filters.command("start"))
@@ -157,5 +154,8 @@ async def help(client, callback_query):
     )
 
 # Start the bot
-enable_wal_mode()  # Enable WAL mode for SQLite
-bot.run()
+if __name__ == "__main__":
+    try:
+        bot.run()
+    except Exception as e:
+        logging.error(f"Bot could not start: {e}")
