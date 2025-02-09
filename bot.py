@@ -1,38 +1,33 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext
-from ss.callbacks import button  # Import button function from ss/callbacks.py
-from config import API_ID, API_HASH, BOT_TOKEN  # Import from config.py
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from config import API_ID, API_HASH, BOT_TOKEN  # Importing API credentials from config.py
+from ss.callbacks import button, send_phone_number  # Importing functions from callbacks.py
 
-# Logging setup
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Buttons for user to select library
-buttons_ques = [
-    [
-        InlineKeyboardButton("Pyrogram V2", callback_data="pyrogram"),
-        InlineKeyboardButton("Telethon", callback_data="telethon"),
-    ],
-]
+# Main function to handle messages
+async def handle_message(update: Update, context: CallbackContext) -> None:
+    if update.message.text:
+        await update.message.reply("Please choose an option using the buttons below.", reply_markup=InlineKeyboardMarkup(buttons_ques))
 
-# Start command to send welcome message
-async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply(
-        "Welcome to the Session String Generator Bot!\n"
-        "Please choose the library for which you want to generate the session string.",
-        reply_markup=InlineKeyboardMarkup(buttons_ques),
-    )
+# Error handler
+def error(update: Update, context: CallbackContext) -> None:
+    logger.warning(f"Update {update} caused error {context.error}")
 
-# Main function to run the bot
 def main():
-    # Create the Application using values from config.py
+    # Create the Application
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Handlers
+    # Commands and Message Handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button))  # Registering button callback from ss/callbacks.py
+    application.add_handler(CallbackQueryHandler(button))  # Using button from callbacks.py
     application.add_handler(MessageHandler(filters.TEXT, handle_message))
+
+    # Error handler
+    application.add_error_handler(error)
 
     # Run the bot
     application.run_polling()
