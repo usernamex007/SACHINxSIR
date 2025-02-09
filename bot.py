@@ -20,6 +20,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "7767480564:AAGwzQ1wDQ8Qkdd9vktp8zW8aUOitT9fA
 # 🔹 Bot Initialization
 bot = Client("session_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
+user_inputs = {}
+
 @bot.on_message(filters.command("start"))
 async def start(client, message):
     keyboard = InlineKeyboardMarkup([
@@ -33,10 +35,13 @@ async def start(client, message):
 
 @bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
+    chat_id = callback_query.message.chat.id
     if callback_query.data == "pyrogram":
-        await generate_pyrogram_session(callback_query.message)
+        await callback_query.message.reply_text("📲 Enter your phone number (e.g., +911234567890).")
+        user_inputs[chat_id] = {"step": "get_phone"}
     elif callback_query.data == "telethon":
-        await generate_telethon_session(callback_query.message)
+        await callback_query.message.reply_text("📞 Enter your phone number (e.g., +911234567890).")
+        user_inputs[chat_id] = {"step": "get_phone_telethon"}
     elif callback_query.data == "qr_login":
         await qr_code_login(callback_query.message)
     elif callback_query.data == "check_session":
@@ -44,19 +49,40 @@ async def callback_query_handler(client, callback_query):
     elif callback_query.data == "help":
         await callback_query.message.reply_text("ℹ️ Use this bot to generate Telegram session strings.")
 
-# 🔹 Pyrogram Session Generator
-async def generate_pyrogram_session(message):
-    await message.reply_text("📲 Enter your phone number (e.g., +911234567890)")
+@bot.on_message(filters.text & filters.private)
+async def handle_user_input(client, message):
+    chat_id = message.chat.id
+    text = message.text.strip()
 
-    phone_number = await bot.listen_for_text(message.chat.id)
-    
+    if chat_id in user_inputs:
+        step = user_inputs[chat_id].get("step")
+
+        if step == "get_phone":
+            user_inputs[chat_id]["phone"] = text
+            await message.reply_text("🔹 Enter the OTP received on your phone.")
+            user_inputs[chat_id]["step"] = "get_otp"
+
+        elif step == "get_otp":
+            user_inputs[chat_id]["otp"] = text
+            await process_pyrogram_session(message)
+
+        elif step == "get_phone_telethon":
+            user_inputs[chat_id]["phone"] = text
+            await message.reply_text("🔹 Enter the OTP received on your phone.")
+            user_inputs[chat_id]["step"] = "get_otp_telethon"
+
+        elif step == "get_otp_telethon":
+            user_inputs[chat_id]["otp"] = text
+            await process_telethon_session(message)
+
+async def process_pyrogram_session(message):
+    chat_id = message.chat.id
+    phone_number = user_inputs[chat_id]["phone"]
+    otp = user_inputs[chat_id]["otp"]
+
     async with Client("my_session", api_id=API_ID, api_hash=API_HASH) as app:
         try:
             await app.send_code(phone_number)
-            await message.reply_text("🔹 Enter the OTP received on your phone.")
-
-            otp = await bot.listen_for_text(message.chat.id)
-
             await app.sign_in(phone_number, otp)
 
             session_string = await app.export_session_string()
@@ -64,27 +90,37 @@ async def generate_pyrogram_session(message):
 
         except SessionPasswordNeeded:
             await message.reply_text("🔑 Two-Step Password Required! Enter your password.")
-            password = await bot.listen_for_text(message.chat.id)
-
-            await app.check_password(password)
-
-            session_string = await app.export_session_string()
-            await message.reply_text(f"✅ Your Pyrogram Session String:\n```\n{session_string}\n```", quote=True)
+            user_inputs[chat_id]["step"] = "get_password"
 
         except Exception as e:
             await message.reply_text(f"❌ Session Generation Failed: {str(e)}")
 
-# 🔹 Listen for Text Messages
-async def listen_for_text(chat_id):
-    response = None
-    while response is None:
-        try:
-            response = await bot.wait_for(filters.text & filters.private, timeout=60)
-            return response.text.strip()
-        except asyncio.TimeoutError:
-            await bot.send_message(chat_id, "⏳ You took too long to respond. Try again!")
-            return None
+async def process_telethon_session(message):
+    chat_id = message.chat.id
+    phone_number = user_inputs[chat_id]["phone"]
+    otp = user_inputs[chat_id]["otp"]
 
-bot.listen_for_text = listen_for_text
+    with TelegramClient(StringSession(), API_ID, API_HASH) as client:
+        try:
+            client.send_code_request(phone_number)
+            client.sign_in(phone_number, otp)
+
+            session_string = client.session.save()
+            await message.reply_text(f"✅ Your Telethon Session String:\n```\n{session_string}\n```", quote=True)
+
+        except SessionPasswordNeededError:
+            await message.reply_text("🔑 Two-Step Password Required! Enter your password.")
+            user_inputs[chat_id]["step"] = "get_password_telethon"
+
+        except Exception as e:
+            await message.reply_text(f"❌ Session Generation Failed: {str(e)}")
+
+async def qr_code_login(message):
+    async with Client("qr_session", api_id=API_ID, api_hash=API_HASH) as app:
+        qr_code = await app.export_login_qr()
+        qr_image = qrcode.make(qr_code)
+        qr_image_path = "qr_code.png"
+        qr_image.save(qr_image_path)
+        await message.reply_photo(qr_image_path, caption="📷 Scan this QR Code to log in.")
 
 bot.run()
