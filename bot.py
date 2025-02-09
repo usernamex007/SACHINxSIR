@@ -59,32 +59,24 @@ async def handle_user_input(client, message):
 
         if step == "get_phone":
             user_inputs[chat_id]["phone"] = text
-            await message.reply_text("🔹 Enter the OTP received on your phone.")
-            user_inputs[chat_id]["step"] = "get_otp"
-
-        elif step == "get_otp":
-            user_inputs[chat_id]["otp"] = text
             await process_pyrogram_session(message)
 
         elif step == "get_phone_telethon":
             user_inputs[chat_id]["phone"] = text
-            await message.reply_text("🔹 Enter the OTP received on your phone.")
-            user_inputs[chat_id]["step"] = "get_otp_telethon"
-
-        elif step == "get_otp_telethon":
-            user_inputs[chat_id]["otp"] = text
             await process_telethon_session(message)
 
 async def process_pyrogram_session(message):
     chat_id = message.chat.id
     phone_number = user_inputs[chat_id]["phone"]
-    otp = user_inputs[chat_id]["otp"]
 
     async with Client("my_session", api_id=API_ID, api_hash=API_HASH) as app:
         try:
-            await app.send_code(phone_number)
-            await app.sign_in(phone_number, otp)
+            sent_code = await app.send_code(phone_number)
+            await message.reply_text("🔹 Check your Telegram app for the OTP.")
 
+            await asyncio.sleep(10)  # 10 सेकंड तक OTP आने का वेट करो
+
+            await app.sign_in(phone_number, sent_code.phone_code_hash)
             session_string = await app.export_session_string()
             await message.reply_text(f"✅ Your Pyrogram Session String:\n```\n{session_string}\n```", quote=True)
 
@@ -98,13 +90,15 @@ async def process_pyrogram_session(message):
 async def process_telethon_session(message):
     chat_id = message.chat.id
     phone_number = user_inputs[chat_id]["phone"]
-    otp = user_inputs[chat_id]["otp"]
 
     with TelegramClient(StringSession(), API_ID, API_HASH) as client:
         try:
-            client.send_code_request(phone_number)
-            client.sign_in(phone_number, otp)
+            sent_code = client.send_code_request(phone_number)
+            await message.reply_text("🔹 Check your Telegram app for the OTP.")
 
+            await asyncio.sleep(10)  # 10 सेकंड का वेट OTP के लिए
+
+            client.sign_in(phone_number, sent_code.phone_code_hash)
             session_string = client.session.save()
             await message.reply_text(f"✅ Your Telethon Session String:\n```\n{session_string}\n```", quote=True)
 
