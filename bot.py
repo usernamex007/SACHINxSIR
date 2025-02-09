@@ -44,21 +44,28 @@ async def callback_query_handler(client, callback_query):
     elif callback_query.data == "help":
         await help_command(client, callback_query.message)
 
+# 🔹 Pyrogram Session Generator
 async def generate_pyrogram_session(message):
-    phone_number = await bot.ask(message.chat.id, "📲 Enter your phone number (e.g., +911234567890)")
+    await message.reply_text("📲 Enter your phone number (e.g., +911234567890)")
+
+    phone_number = await bot.listen(filters.private & filters.text)
     
     async with Client("my_session", api_id=API_ID, api_hash=API_HASH) as app:
         try:
             await app.send_code(phone_number.text.strip())
-            otp = await bot.ask(message.chat.id, "🔹 Enter the OTP received on your phone.")
-            
+            await message.reply_text("🔹 Enter the OTP received on your phone.")
+
+            otp = await bot.listen(filters.private & filters.text)
+
             await app.sign_in(phone_number.text.strip(), otp.text.strip())
 
             session_string = await app.export_session_string()
             await message.reply_text(f"✅ Your Pyrogram Session String:\n```\n{session_string}\n```", quote=True)
 
         except SessionPasswordNeeded:
-            password = await bot.ask(message.chat.id, "🔑 Two-Step Password Required! Enter your password.")
+            await message.reply_text("🔑 Two-Step Password Required! Enter your password.")
+            password = await bot.listen(filters.private & filters.text)
+
             await app.check_password(password.text.strip())
 
             session_string = await app.export_session_string()
@@ -67,28 +74,35 @@ async def generate_pyrogram_session(message):
         except Exception as e:
             await message.reply_text(f"❌ Session Generation Failed: {str(e)}")
 
+# 🔹 Telethon Session Generator
 async def generate_telethon_session(message):
-    phone_number = await bot.ask(message.chat.id, "📞 Enter your phone number (e.g., +911234567890)")
+    await message.reply_text("📞 Enter your phone number (e.g., +911234567890)")
+
+    phone_number = await bot.listen(filters.private & filters.text)
 
     with TelegramClient(StringSession(), API_ID, API_HASH) as client:
         try:
             client.send_code_request(phone_number.text.strip())
-            otp = await bot.ask(message.chat.id, "🔹 Enter the OTP received on your phone.")
+            await message.reply_text("🔹 Enter the OTP received on your phone.")
+
+            otp = await bot.listen(filters.private & filters.text)
 
             client.sign_in(phone_number.text.strip(), otp.text.strip())
             session_string = client.session.save()
             await message.reply_text(f"✅ Your Telethon Session String:\n```\n{session_string}\n```", quote=True)
 
         except SessionPasswordNeededError:
-            password = await bot.ask(message.chat.id, "🔑 Two-Step Password Required! Enter your password.")
-            client.sign_in(password=password.text.strip())
+            await message.reply_text("🔑 Two-Step Password Required! Enter your password.")
+            password = await bot.listen(filters.private & filters.text)
 
+            client.sign_in(password=password.text.strip())
             session_string = client.session.save()
             await message.reply_text(f"✅ Your Telethon Session String:\n```\n{session_string}\n```", quote=True)
 
         except Exception as e:
             await message.reply_text(f"❌ Session Generation Failed: {str(e)}")
 
+# 🔹 QR Code Login
 async def qr_code_login(message):
     async with Client("qr_session", api_id=API_ID, api_hash=API_HASH) as app:
         qr_code = await app.export_login_qr()
@@ -97,6 +111,7 @@ async def qr_code_login(message):
         qr_image.save(qr_image_path)
         await message.reply_photo(qr_image_path, caption="📷 Scan this QR Code to log in.")
 
+# 🔹 Check Session Validity
 @bot.on_message(filters.text)
 async def check_session_validity(client, message):
     session_string = message.text.strip()
