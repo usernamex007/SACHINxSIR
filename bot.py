@@ -4,7 +4,7 @@ import qrcode
 from io import BytesIO
 from telethon import events
 from dotenv import load_dotenv
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, Button
 from telethon.sessions import StringSession as TelethonSession
 from telethon.errors import SessionPasswordNeededError
 from pyrogram import Client as PyroClient
@@ -101,10 +101,9 @@ async def start(event):
                "- QR Code for Safety\n\n" \
                "📌 *Select an option below:*"
 
-    # बटन जोड़ने के लिए अलग तरीका
     buttons = [
-        [("📲 Telethon Session", "telethon")],
-        [("📲 Pyrogram Session", "pyrogram")]
+        [Button.text("📲 Telethon Session")],
+        [Button.text("📲 Pyrogram Session")]
     ]
 
     await bot.send_message(user_id, msg_text, buttons=buttons, parse_mode="Markdown")
