@@ -1,0 +1,36 @@
+# Python specific
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.pdb
+*.swp
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+.ENV/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Django
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+db.sqlite3
+/staticfiles
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# config.py - Your sensitive credentials file
+config.py
