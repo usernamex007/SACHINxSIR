@@ -1,13 +1,10 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext
-from ss.callbacks import button  # Import the button function from ss/callbacks.py
+from ss.callbacks import button  # Import button function from ss/callbacks.py
+from config import API_ID, API_HASH, BOT_TOKEN  # Import from config.py
 
-# API Details (replace with your own)
-API_ID = '28795512'  # Your API ID
-API_HASH = 'c17e4eb6d994c9892b8a8b6bfea4042a'  # Your API Hash
-BOT_TOKEN = '7610510597:AAFX2uCDdl48UTOHnIweeCMms25xOKF9PoA'  # Your Bot Token
-
+# Logging setup
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -29,6 +26,7 @@ async def start(update: Update, context: CallbackContext) -> None:
 
 # Main function to run the bot
 def main():
+    # Create the Application using values from config.py
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Handlers
